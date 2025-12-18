@@ -30,30 +30,6 @@ class SupersetClient:
         self.session = requests.Session()
         self._csrf_token = None
 
-    def _get_db_connection(self):
-        """Get a database connection, preferring DB_URI env var if set."""
-        try:
-            import psycopg2
-        except ImportError:
-            raise RuntimeError("psycopg2 not installed. Run: pip install psycopg2-binary")
-
-        # 1. Try DB_URI from environment (Cloud/Tunnel mode)
-        db_uri = os.getenv("DB_URI")
-        if db_uri:
-            print(f"DEBUG: Connecting to DB using DB_URI...")
-            return psycopg2.connect(db_uri, connect_timeout=10)
-        
-        # 2. Fallback to Localhost (Local mode)
-        print(f"DEBUG: Connecting to DB using Localhost fallback...")
-        return psycopg2.connect(
-            host="localhost",
-            port=5432,
-            database="superset",
-            user="superset",
-            password="superset_password",
-            connect_timeout=5
-        )
-
     def _auth_headers(self):
         headers = {"Content-Type": "application/json"}
         if self.api_key:
@@ -269,7 +245,15 @@ class SupersetClient:
         # Connect directly to PostgreSQL (exposed on localhost:5432)
         conn = None
         try:
-            conn = self._get_db_connection()
+            print(f"Attempting database connection to localhost:5432...")
+            conn = psycopg2.connect(
+                host="localhost",
+                port=5432,
+                database="superset",
+                user="superset",
+                password="superset_password",
+                connect_timeout=5
+            )
             print(f"✅ Connected to database")
             
             cursor = conn.cursor()
@@ -335,7 +319,14 @@ class SupersetClient:
         conn = None
         try:
             print(f"Creating dashboard via database: {dashboard_title}")
-            conn = self._get_db_connection()
+            conn = psycopg2.connect(
+                host="localhost",
+                port=5432,
+                database="superset",
+                user="superset",
+                password="superset_password",
+                connect_timeout=5
+            )
             
             cursor = conn.cursor()
             
@@ -391,7 +382,14 @@ class SupersetClient:
         conn = None
         try:
             print(f"Linking {len(chart_ids)} charts to dashboard {dashboard_id} via database...")
-            conn = self._get_db_connection()
+            conn = psycopg2.connect(
+                host="localhost",
+                port=5432,
+                database="superset",
+                user="superset",
+                password="superset_password",
+                connect_timeout=5
+            )
             cursor = conn.cursor()
             
             # 1. Create position_json with charts
@@ -600,7 +598,14 @@ class SupersetClient:
         conn = None
         try:
             print(f"Deleting dashboard {dashboard_id} via database...")
-            conn = self._get_db_connection()
+            conn = psycopg2.connect(
+                host="localhost",
+                port=5432,
+                database="superset",
+                user="superset",
+                password="superset_password",
+                connect_timeout=5
+            )
             cursor = conn.cursor()
             
             # Delete from dashboard_slices (linking table) first
