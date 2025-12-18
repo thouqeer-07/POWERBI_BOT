@@ -29,10 +29,18 @@ client = InferenceClient(model=LLAMA_MODEL_ID, token=HF_TOKEN)
 
 from superset_client import SupersetClient
 
-# Database connection string (Postgres exposed on localhost:5432)
-DB_URI = "postgresql://superset:superset_password@localhost:5432/superset"
+# Database connection string
+# Prioritize st.secrets (Cloud), fallback to os.getenv (Local, or .env), fallback to default
+DB_URI = st.secrets.get("DB_URI") or os.getenv("DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+
 # URI for Superset container to reach the DB container (replace localhost with service name 'db')
-DOCKER_DB_URI = DB_URI.replace("localhost", "db")
+# If we are tunneling, DOCKER_DB_URI might not be relevant for this client script, 
+# but for internal container talk (if this script ran in container). 
+# For now, keep the logic but base it on the default if not provided.
+if "localhost" in DB_URI:
+    DOCKER_DB_URI = DB_URI.replace("localhost", "db")
+else:
+    DOCKER_DB_URI = DB_URI # Use as-is if external
 
 # Initialize Superset Client
 @st.cache_resource
