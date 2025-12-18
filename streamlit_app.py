@@ -129,7 +129,7 @@ def render_fullscreen_iframe(url, height=800):
     components.html(html_code, height=height, scrolling=False)
 
 import time
-from google.api_core import exceptions
+
 
 def get_llama_suggestions(df, table_name, retries=3):
     """Ask Llama 3 for a list of charts based on the dataframe columns using HuggingFace Inference API."""
