@@ -22,8 +22,9 @@ from huggingface_hub import InferenceClient
 load_dotenv()
 
 # HuggingFace configuration
-HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
-LLAMA_MODEL_ID = os.getenv("LLAMA_MODEL_ID", "meta-llama/Meta-Llama-3-8B-Instruct")
+# Prioritize st.secrets (Cloud), fallback to os.getenv (Local)
+HF_TOKEN = st.secrets.get("HUGGINGFACE_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
+LLAMA_MODEL_ID = st.secrets.get("LLAMA_MODEL_ID") or os.getenv("LLAMA_MODEL_ID", "meta-llama/Meta-Llama-3-8B-Instruct")
 client = InferenceClient(model=LLAMA_MODEL_ID, token=HF_TOKEN)
 
 from superset_client import SupersetClient
@@ -49,7 +50,8 @@ def render_fullscreen_iframe(url, height=800):
     
     # If a public URL is configured (e.g. via ngrok), replace the internal URL domain
     # User requested specific public URL:
-    public_url_base = os.getenv("SUPERSET_PUBLIC_URL", "https://nonhallucinatory-meetly-sharika.ngrok-free.dev")
+    # Prioritize st.secrets (Cloud), fallback to os.getenv (Local)
+    public_url_base = st.secrets.get("SUPERSET_PUBLIC_URL") or os.getenv("SUPERSET_PUBLIC_URL", "https://nonhallucinatory-meetly-sharika.ngrok-free.dev")
     if public_url_base:
         # Assuming 'url' starts with the internal http://localhost:8088 or similar
         # We replace the base part. A simple replace of the internal base is safest if known,
