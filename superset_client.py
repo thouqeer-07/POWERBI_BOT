@@ -115,6 +115,7 @@ class SupersetClient:
         max_retries = 3
         retry_delay = 2 # seconds
         
+        for attempt in range(max_retries):
             try:
                 print(f"DEBUG: {method} {url} (Attempt {attempt + 1})")
                 # Set allow_redirects=True to handle 308 redirects from no-slash to slash (common in ngrok/Superset)
