@@ -312,12 +312,13 @@ class SupersetClient:
                 if resp.status_code == 422 and "already exists" in str(body):
                     print("DEBUG: Dataset already exists. Fetching existing dataset...")
                     # Try to find the dataset ID
-                    # We can't easily search by table name via API in all versions, 
-                    # but we can try to list datasets and filter.
-                    # For now, let's just return a dummy success with the ID if we can find it, 
-                    # or just raise a specific error that the app can handle.
-                    # Better: try to fetch it.
-                    return self._find_dataset(database_id, table_name) or body
+                    existing_ds = self._find_dataset(database_id, table_name)
+                    if existing_ds:
+                        return existing_ds
+                    
+                    # If we can't find it, we can't proceed. Returning 'body' causes NoneType errors downstream.
+                    # Raise an error to be caught by the app.
+                    raise RuntimeError(f"Dataset '{table_name}' already exists, but could not be found via API. Check database permissions or name mismatch.")
 
                 print(f"DEBUG: Failed with status {resp.status_code}: {body}")
                 errors.append(f"{endpoint} + {payload} => Status {resp.status_code}: {body}")
@@ -332,15 +333,20 @@ class SupersetClient:
             resp = self._request("GET", "api/v1/dataset/", timeout=30)
             if resp.ok:
                 datasets = resp.json().get("result", [])
+                print(f"DEBUG: _find_dataset searching for DB={database_id} Table={table_name} in {len(datasets)} datasets...")
                 for ds in datasets:
                     # Check if it matches
                     # Note: 'database' field in list response might be an object or id
                     ds_db = ds.get("database", {})
                     ds_db_id = ds_db.get("id") if isinstance(ds_db, dict) else ds_db
                     
-                    if int(ds_db_id) == int(database_id) and ds.get("table_name") == table_name:
+                    # Log comparison for debugging
+                    # print(f"DEBUG: Checking Dataset {ds.get('id')}: DB={ds_db_id} Table={ds.get('table_name')}")
+
+                    if str(ds_db_id) == str(database_id) and ds.get("table_name") == table_name:
                         print(f"DEBUG: Found existing dataset ID: {ds.get('id')} for table {table_name}")
                         return ds
+                print("DEBUG: Dataset not found in list.")
         except Exception as e:
             print(f"Warning: Could not search for existing dataset: {e}")
         return None
