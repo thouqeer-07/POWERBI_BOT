@@ -142,8 +142,18 @@ class SupersetClient:
         url = f"{self.superset_url}/api/v1/security/login"
         payload = {"username": self.username, "password": self.password, "provider": "db"}
         
+        headers = {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+        }
+        
         # Use session to persist cookies
-        resp = self.session.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
+        print(f"DEBUG: Authenticating to {url}...")
+        resp = self.session.post(url, json=payload, headers=headers, timeout=30)
+        
+        if not resp.ok:
+            print(f"DEBUG: Authentication failed ({resp.status_code}): {resp.text}")
+        
         resp.raise_for_status()
         data = resp.json()
         
@@ -160,7 +170,10 @@ class SupersetClient:
         """Fetch CSRF token using the current session/token."""
         # This is a special case, we don't use _request to avoid infinite recursion if it fails
         url = f"{self.superset_url}/api/v1/security/csrf_token/"
-        headers = {"Authorization": f"Bearer {self._token}"}
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+            "ngrok-skip-browser-warning": "true"
+        }
         try:
             resp = self.session.get(url, headers=headers, timeout=10)
             resp.raise_for_status()
