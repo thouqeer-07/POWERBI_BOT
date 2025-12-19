@@ -44,7 +44,7 @@ class SupersetClient:
         self._csrf_token = None
 
     def _get_db_connection(self):
-        """Get a database connection, preferring DB_URI env var if set."""
+        """Get a database connection using DB_URI."""
         try:
             import psycopg2
         except ImportError:
@@ -57,20 +57,13 @@ class SupersetClient:
                 val = st.secrets.get(key)
             return val or os.getenv(key)
 
-        # 1. Try SUPERSET_METADATA_DB_URI (Specific for Superset's own tables like 'slices')
-        metadata_db_uri = get_conf("SUPERSET_METADATA_DB_URI")
-        if metadata_db_uri:
-            print(f"DEBUG: Connecting to Superset Metadata DB using SUPERSET_METADATA_DB_URI...")
-            return psycopg2.connect(metadata_db_uri, connect_timeout=10)
-
-        # 2. Try DB_URI from environment (Generic DB connection)
+        # 1. Use DB_URI for both Data and Metadata (Unified Setup)
         db_uri = get_conf("DB_URI")
         if db_uri:
-            print(f"DEBUG: Connecting to DB using DB_URI...")
-            # WARNING: This might fail if DB_URI doesn't point to the Superset Metadata DB
+            print(f"DEBUG: Connecting to database using DB_URI...")
             return psycopg2.connect(db_uri, connect_timeout=10)
         
-        # 3. Fallback to Localhost (Local mode)
+        # 2. Fallback to Localhost (Local development only)
         print(f"DEBUG: Connecting to DB using Localhost fallback...")
         return psycopg2.connect(
             host="localhost",
@@ -396,12 +389,12 @@ class SupersetClient:
             raise RuntimeError(f"Cannot connect to PostgreSQL for metadata: {str(e)}")
         except psycopg2.errors.UndefinedTable as e:
             print(f"❌ CRITICAL ERROR: The table 'slices' was not found in the current database.")
-            print(f"💡 REASON: You are likely connected to your DATA database (Supabase) instead of the SUPERSET METADATA database.")
-            print(f"💡 FIX: Add 'SUPERSET_METADATA_DB_URI' to your secrets pointing to your Superset PostgreSQL database.")
+            print(f"💡 REASON: Your database migrations might not have been run, or DB_URI is pointing to the wrong place.")
+            print(f"💡 FIX: Ensure you have run 'superset db upgrade' to create the Superset tables in your database.")
             if conn:
                 conn.rollback()
                 conn.close()
-            raise RuntimeError(f"Metadata table 'slices' missing. Please set SUPERSET_METADATA_DB_URI.")
+            raise RuntimeError(f"Metadata table 'slices' missing. Please ensure migrations were run on your DB_URI.")
         except Exception as e:
             print(f"❌ Database insertion failed: {type(e).__name__}: {str(e)}")
             if conn:
