@@ -34,7 +34,7 @@ class SupersetClient:
                 val = st.secrets.get(key)
             return val or os.getenv(key) or default
 
-        self.superset_url = (superset_url or get_conf("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
+        self.superset_url = (superset_url or get_conf("SUPERSET_PUBLIC_URL") or get_conf("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
         self.api_key = api_key or get_conf("SUPERSET_API_KEY")
         self.username = username or get_conf("SUPERSET_USERNAME")
         self.password = password or get_conf("SUPERSET_PASSWORD")
@@ -57,13 +57,20 @@ class SupersetClient:
                 val = st.secrets.get(key)
             return val or os.getenv(key)
 
-        # 1. Try DB_URI from environment (Cloud/Tunnel mode)
+        # 1. Try SUPERSET_METADATA_DB_URI (Specific for Superset's own tables like 'slices')
+        metadata_db_uri = get_conf("SUPERSET_METADATA_DB_URI")
+        if metadata_db_uri:
+            print(f"DEBUG: Connecting to Superset Metadata DB using SUPERSET_METADATA_DB_URI...")
+            return psycopg2.connect(metadata_db_uri, connect_timeout=10)
+
+        # 2. Try DB_URI from environment (Generic DB connection)
         db_uri = get_conf("DB_URI")
         if db_uri:
             print(f"DEBUG: Connecting to DB using DB_URI...")
+            # WARNING: This might fail if DB_URI doesn't point to the Superset Metadata DB
             return psycopg2.connect(db_uri, connect_timeout=10)
         
-        # 2. Fallback to Localhost (Local mode)
+        # 3. Fallback to Localhost (Local mode)
         print(f"DEBUG: Connecting to DB using Localhost fallback...")
         return psycopg2.connect(
             host="localhost",

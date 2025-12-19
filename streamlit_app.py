@@ -45,7 +45,9 @@ else:
 # Initialize Superset Client
 @st.cache_resource
 def get_superset_client():
-    return SupersetClient()
+    # Fetch public URL from secrets if available
+    public_url = st.secrets.get("SUPERSET_PUBLIC_URL") or os.getenv("SUPERSET_PUBLIC_URL")
+    return SupersetClient(superset_url=public_url)
 
 try:
     sup = get_superset_client()
