@@ -225,7 +225,9 @@ class SupersetClient:
         }
         
         try:
-            resp = self._request("POST", "api/v1/chart", json=payload, timeout=30)
+            resp = self._request("POST", "api/v1/chart/", json=payload, timeout=30)
+            if not resp.ok:
+                print(f"DEBUG: Chart API failed ({resp.status_code}): {resp.text}")
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
