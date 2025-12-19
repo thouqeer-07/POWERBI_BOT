@@ -16,6 +16,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 import requests
+from huggingface_hub import InferenceClient
 # Helper to get config from st.secrets (Cloud) or os.getenv (Local)
 def get_config(key, default=None):
     if key in st.secrets:
