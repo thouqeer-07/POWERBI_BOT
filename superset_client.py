@@ -59,6 +59,9 @@ class SupersetClient:
         endpoint = endpoint.lstrip("/")
         url = f"{self.superset_url}/{endpoint}"
         
+        if os.getenv("DEBUG") or get_config("DEBUG"):
+            print(f"DEBUG: Superset Request: {method} {url}")
+        
         # Ensure headers are present
         if "headers" not in kwargs:
             kwargs["headers"] = self._auth_headers()
@@ -225,12 +228,25 @@ class SupersetClient:
         }
         
         try:
+            # Try both with and without trailing slash as some Superset versions are picky
             resp = self._request("POST", "api/v1/chart/", json=payload, timeout=30)
+            if resp.status_code == 404:
+                resp = self._request("POST", "api/v1/chart", json=payload, timeout=30)
+            
             if not resp.ok:
                 print(f"DEBUG: Chart API failed ({resp.status_code}): {resp.text}")
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
+            # Check if we should even attempt direct DB fallback
+            metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or ""
+            is_local_db = "localhost" in metadata_db_uri or "127.0.0.1" in metadata_db_uri or not metadata_db_uri
+            
+            # If in Streamlit Cloud (detected via environment) and DB is local, don't fall back
+            if os.getenv("STREAMLIT_SERVER_PORT") and is_local_db:
+                print(f"Superset API failed: {e}. Skipping local DB fallback in Cloud environment.")
+                raise RuntimeError(f"Superset API Error: {e}")
+
             # Fallback: use direct database insertion
             print(f"API chart creation failed: {e}. Trying database-direct method...")
             return self._create_chart_direct(dataset_id, chart_name, viz_type, params)
@@ -361,6 +377,14 @@ class SupersetClient:
         try:
             return self._add_charts_to_dashboard_api(dashboard_id, chart_ids)
         except Exception as e:
+            # Check if we should fall back
+            metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or ""
+            is_local_db = "localhost" in metadata_db_uri or "127.0.0.1" in metadata_db_uri or not metadata_db_uri
+            
+            if os.getenv("STREAMLIT_SERVER_PORT") and is_local_db:
+                print(f"Superset Dashboard Link API failed: {e}. Skipping local DB fallback in Cloud environment.")
+                raise RuntimeError(f"Dashboard Link API Error: {e}")
+
             print(f"API chart linking failed: {e}. Trying database-direct method...")
             return self._add_charts_to_dashboard_direct(dashboard_id, chart_ids)
     
@@ -513,24 +537,24 @@ class SupersetClient:
         position_json["GRID_ID"]["children"] = grid_children
         
         # 3. Prepare payload
-        owners = [o["id"] for o in data.get("owners", [])]
-        
+        # 5. Submit update
         payload = {
-            "dashboard_title": data.get("dashboard_title"),
-            "slug": data.get("slug"),
-            "owners": owners,
             "position_json": json.dumps(position_json),
-            "published": data.get("published", False)
+            "css": "",
+            "json_metadata": json.dumps({
+                "timed_refresh_immune_slices": [],
+                "expanded_slices": {},
+                "refresh_frequency": 0,
+                "default_filters": "{}"
+            })
         }
         
-        # 4. Update Dashboard FIRST
-        print(f"DEBUG: Updating dashboard {dashboard_id} with position_json...")
-        resp = self._request("PUT", f"api/v1/dashboard/{dashboard_id}", json=payload, timeout=30)
-        
+        url = f"api/v1/dashboard/{dashboard_id}"
+        resp = self._request("PUT", url, json=payload, timeout=30)
         if not resp.ok:
-            print(f"DEBUG: Dashboard update failed: {resp.text}")
-            raise RuntimeError(f"Failed to update dashboard: {resp.status_code} - {resp.text}")
-            
+            print(f"DEBUG: Dashboard link API failed ({resp.status_code}): {resp.text}")
+        resp.raise_for_status()
+        
         # 5. Link charts AFTER dashboard update
         # This prevents the dashboard update from overwriting the links
         print(f"DEBUG: Linking {len(chart_ids)} charts to dashboard {dashboard_id}...")
