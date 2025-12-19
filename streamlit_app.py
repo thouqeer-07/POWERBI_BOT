@@ -245,20 +245,25 @@ st.title("Superset AI Assistant")
 # Sidebar for File Upload
 with st.sidebar:
     st.header("Data Upload")
-    # Try to find the 'Supabase_Cloud' database automatically
-    db_id = sup.get_database_id("Supabase_Cloud")
+    # Try to find the 'Supabase_Cloud' database automatically (using session_state to avoid redundant API calls)
+    if "superset_db_id" not in st.session_state:
+        db_id = sup.get_database_id("Supabase_Cloud")
+        if db_id:
+            st.session_state["superset_db_id"] = db_id
+        else:
+            with st.spinner("Connecting Superset to Database..."):
+                try:
+                    # Use DOCKER_DB_URI so Superset (in Docker) can reach the DB
+                    sup.add_database("Supabase_Cloud", DOCKER_DB_URI)
+                    st.success("Successfully added 'Supabase_Cloud' database to Superset!")
+                    time.sleep(1) # Wait a moment for consistency
+                    db_id = sup.get_database_id("Supabase_Cloud")
+                    if db_id:
+                        st.session_state["superset_db_id"] = db_id
+                except Exception as e:
+                    st.error(f"Failed to auto-connect database: {e}")
     
-    # Auto-register if missing
-    if not db_id:
-        with st.spinner("Connecting Superset to Database..."):
-            try:
-                # Use DOCKER_DB_URI so Superset (in Docker) can reach the DB
-                sup.add_database("Supabase_Cloud", DOCKER_DB_URI)
-                st.success("Successfully added 'Supabase_Cloud' database to Superset!")
-                time.sleep(1) # Wait a moment for consistency
-                db_id = sup.get_database_id("Supabase_Cloud")
-            except Exception as e:
-                st.error(f"Failed to auto-connect database: {e}")
+    db_id = st.session_state.get("superset_db_id")
 
     if db_id:
         # Verify connection
@@ -313,8 +318,9 @@ if 'upload_clicked' in locals() and upload_clicked and uploaded_file:
             st.session_state["current_dataframe"] = df  # Store dataframe for chat context
             with st.spinner("🤖 AI is analyzing your dataset..."):
                 plan = get_llama_suggestions(df, table_name)
-                st.session_state["dashboard_plan"] = plan
-                st.rerun()
+            st.session_state["dashboard_plan"] = plan
+            # Remove st.rerun() here - let Streamlit update the UI naturally on next script execution
+            # Since we just updated session_state, the next block will see it.
         except Exception as e:
             st.warning(f"Uploaded to DB but failed to create Superset dataset: {e}")
     except Exception as e:
@@ -343,7 +349,8 @@ if "dashboard_plan" in st.session_state:
                  del st.session_state["dashboard_plan"]
                  del st.session_state["waiting_for_dashboard_confirmation"]
                  st.success("Dashboard finalized!")
-                 st.rerun()
+                 # st.rerun() # Optional, depends on UI layout. 
+                 # Keeping it for confirmation if needed, but testing without it for speed.
             
             if c2.button("Reject & Delete"):
                  dash_id = st.session_state.get("created_dashboard_id")
@@ -472,7 +479,8 @@ if "dashboard_plan" in st.session_state:
                             st.session_state["created_dashboard_id"] = dash_id
                             st.session_state["created_dashboard_url"] = dash_url
                             st.session_state["waiting_for_dashboard_confirmation"] = True
-                            st.rerun()
+                            # Optional rerun to show the review UI immediately
+                            st.rerun() 
 
                         else:
                             status.error("No charts were successfully created.")
