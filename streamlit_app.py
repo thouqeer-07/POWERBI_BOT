@@ -16,20 +16,24 @@ import pandas as pd
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 import requests
-from huggingface_hub import InferenceClient
+# Helper to get config from st.secrets (Cloud) or os.getenv (Local)
+def get_config(key, default=None):
+    if key in st.secrets:
+        return st.secrets[key]
+    return os.getenv(key, default)
 
 # Load environment variables
 load_dotenv()
 
 # HuggingFace configuration
-HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
-LLAMA_MODEL_ID = os.getenv("LLAMA_MODEL_ID", "meta-llama/Meta-Llama-3-8B-Instruct")
+HF_TOKEN = get_config("HUGGINGFACE_TOKEN")
+LLAMA_MODEL_ID = get_config("LLAMA_MODEL_ID", "meta-llama/Meta-Llama-3-8B-Instruct")
 client = InferenceClient(model=LLAMA_MODEL_ID, token=HF_TOKEN)
 
 from superset_client import SupersetClient
 
 # Database connection string from environment (fallback to local if not set)
-DB_URI = os.getenv("DB_URI", "postgresql://superset:superset_password@localhost:5432/superset")
+DB_URI = get_config("DB_URI", "postgresql://superset:superset_password@localhost:5432/superset")
 # URI for Superset container to reach the DB container (replace localhost with service name 'db' if applicable)
 DOCKER_DB_URI = DB_URI.replace("localhost", "db")
 
@@ -49,7 +53,7 @@ def render_fullscreen_iframe(url, height=800):
     
     # If a public URL is configured (e.g. via ngrok), replace the internal URL domain
     # User requested specific public URL:
-    public_url_base = os.getenv("SUPERSET_PUBLIC_URL", "https://nonhallucinatory-meetly-sharika.ngrok-free.dev")
+    public_url_base = get_config("SUPERSET_PUBLIC_URL", "https://nonhallucinatory-meetly-sharika.ngrok-free.dev")
     if public_url_base:
         # Assuming 'url' starts with the internal http://localhost:8088 or similar
         # We replace the base part. A simple replace of the internal base is safest if known,
