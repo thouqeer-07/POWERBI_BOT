@@ -112,7 +112,9 @@ class SupersetClient:
             kwargs["headers"] = self._auth_headers()
         
         try:
+            print(f"DEBUG: {method} {url}")
             resp = self.session.request(method, url, **kwargs)
+            print(f"DEBUG: Response Status: {resp.status_code}")
             
             # If 401, try to refresh token and retry once
             if resp.status_code == 401:
@@ -121,6 +123,10 @@ class SupersetClient:
                 # Force new headers with new token
                 kwargs["headers"] = self._auth_headers() 
                 resp = self.session.request(method, url, **kwargs)
+                print(f"DEBUG: Retry Response Status: {resp.status_code}")
+                
+            if not resp.ok:
+                print(f"DEBUG: Response Error Body: {resp.text}")
                 
             return resp
         except Exception as e:
