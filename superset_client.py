@@ -103,18 +103,18 @@ class SupersetClient:
         return headers
 
     def _request(self, method, endpoint, **kwargs):
-        """Wrapper for requests with auto-reauthentication on 401."""
+        """Wrapper for requests with auto-reauthentication and retries."""
         endpoint = endpoint.lstrip("/")
         url = f"{self.superset_url}/{endpoint}"
-        
-        import time
-        max_retries = 3
-        retry_delay = 2 # seconds
         
         # Ensure headers are present
         if "headers" not in kwargs:
             kwargs["headers"] = self._auth_headers()
             
+        import time
+        max_retries = 3
+        retry_delay = 2 # seconds
+        
         for attempt in range(max_retries):
             try:
                 print(f"DEBUG: {method} {url} (Attempt {attempt + 1})")
@@ -370,7 +370,15 @@ class SupersetClient:
             print(f"❌ Database connection failed: {str(e)}")
             if conn:
                 conn.close()
-            raise RuntimeError(f"Cannot connect to PostgreSQL: {str(e)}")
+            raise RuntimeError(f"Cannot connect to PostgreSQL for metadata: {str(e)}")
+        except psycopg2.errors.UndefinedTable as e:
+            print(f"❌ CRITICAL ERROR: The table 'slices' was not found in the current database.")
+            print(f"💡 REASON: You are likely connected to your DATA database (Supabase) instead of the SUPERSET METADATA database.")
+            print(f"💡 FIX: Add 'SUPERSET_METADATA_DB_URI' to your secrets pointing to your Superset PostgreSQL database.")
+            if conn:
+                conn.rollback()
+                conn.close()
+            raise RuntimeError(f"Metadata table 'slices' missing. Please set SUPERSET_METADATA_DB_URI.")
         except Exception as e:
             print(f"❌ Database insertion failed: {type(e).__name__}: {str(e)}")
             if conn:
@@ -432,6 +440,13 @@ class SupersetClient:
             print(f"✅ Dashboard created via database with ID: {dashboard_id}")
             return {"id": dashboard_id, "dashboard_title": dashboard_title, "slug": slug}
             
+        except psycopg2.errors.UndefinedTable as e:
+            print(f"❌ CRITICAL ERROR: The table 'dashboards' was not found.")
+            print(f"💡 FIX: Set 'SUPERSET_METADATA_DB_URI' to your Superset metadata database.")
+            if conn:
+                conn.rollback()
+                conn.close()
+            raise RuntimeError(f"Metadata table 'dashboards' missing.")
         except Exception as e:
             print(f"❌ Dashboard creation failed: {type(e).__name__}: {str(e)}")
             if conn:
