@@ -107,31 +107,48 @@ class SupersetClient:
         endpoint = endpoint.lstrip("/")
         url = f"{self.superset_url}/{endpoint}"
         
+        import time
+        max_retries = 3
+        retry_delay = 2 # seconds
+        
         # Ensure headers are present
         if "headers" not in kwargs:
             kwargs["headers"] = self._auth_headers()
-        
-        try:
-            print(f"DEBUG: {method} {url}")
-            resp = self.session.request(method, url, **kwargs)
-            print(f"DEBUG: Response Status: {resp.status_code}")
             
-            # If 401, try to refresh token and retry once
-            if resp.status_code == 401:
-                print("DEBUG: Got 401, attempting to re-authenticate...")
-                self._token = None # Clear invalid token
-                # Force new headers with new token
-                kwargs["headers"] = self._auth_headers() 
+        for attempt in range(max_retries):
+            try:
+                print(f"DEBUG: {method} {url} (Attempt {attempt + 1})")
                 resp = self.session.request(method, url, **kwargs)
-                print(f"DEBUG: Retry Response Status: {resp.status_code}")
+                print(f"DEBUG: Response Status: {resp.status_code}")
                 
-            if not resp.ok:
-                print(f"DEBUG: Response Error Body: {resp.text}")
-                
-            return resp
-        except Exception as e:
-            # Wrap connection errors etc.
-            raise RuntimeError(f"Request failed: {e}")
+                # If 401, try to refresh token and retry once
+                if resp.status_code == 401:
+                    print("DEBUG: Got 401, attempting to re-authenticate...")
+                    self._token = None # Clear invalid token
+                    # Force new headers with new token
+                    kwargs["headers"] = self._auth_headers() 
+                    resp = self.session.request(method, url, **kwargs)
+                    print(f"DEBUG: Retry Response Status: {resp.status_code}")
+                    
+                # Handle transient errors (500, 502, 503, 504) with retries
+                if resp.status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
+                    print(f"DEBUG: Transient error {resp.status_code}. Retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+
+                if not resp.ok:
+                    print(f"DEBUG: Response Error Body: {resp.text}")
+                    
+                return resp
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"DEBUG: Request failed: {e}. Retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                # Wrap connection errors etc.
+                raise RuntimeError(f"Request failed after {max_retries} attempts: {e}")
 
     def _ensure_token(self):
         if self._token:
@@ -289,10 +306,11 @@ class SupersetClient:
             "datasource_id": int(dataset_id),
             "datasource_type": "table",
             "params": json.dumps(params or {}),
-            "owners": [1] # Default to admin user (usually ID 1) to avoid some 500 errors
+            "owners": [1] 
         }
         
         print(f"DEBUG: Creating chart '{chart_name}' for dataset {dataset_id}...")
+        print(f"DEBUG: Payload: {json.dumps(payload, indent=2)}")
         
         try:
             # Note: Many Superset versions prefer/require the trailing slash
