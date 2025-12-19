@@ -229,10 +229,18 @@ class SupersetClient:
 
     def get_database_id(self, database_name):
         """Find database ID by name."""
-        dbs = self.list_databases().get("result", [])
+        resp = self.list_databases()
+        dbs = resp.get("result", [])
+        
+        print(f"DEBUG: Searching for database '{database_name}' in {len(dbs)} registered databases...")
         for db in dbs:
-            if db.get("database_name") == database_name:
+            curr_name = db.get("database_name")
+            print(f"  - Found: '{curr_name}' (ID: {db.get('id')})")
+            if curr_name == database_name:
                 return db.get("id")
+        
+        # If not found in primary list, it might be on another page or filtered.
+        # But for now, returning None.
         return None
 
     def create_dataset(self, database_id, schema, table_name, dataset_name=None):
@@ -705,13 +713,28 @@ class SupersetClient:
             "database_name": database_name,
             "sqlalchemy_uri": sqlalchemy_uri
         }
-        resp = self._request("POST", "api/v1/database/", json=payload, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+        
+        try:
+            resp = self._request("POST", "api/v1/database/", json=payload, timeout=30)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            # If we still got a 422 or any fail, try ONE LAST TIME to find the ID 
+            # (Just in case it was created in a parallel rerun)
+            print(f"DEBUG: add_database failed: {e}. Final attempt to find existing ID...")
+            import time
+            time.sleep(1)
+            final_check_id = self.get_database_id(database_name)
+            if final_check_id:
+                return {"id": final_check_id, "database_name": database_name, "message": "Recovered ID after failure"}
+            raise e
 
     def list_databases(self):
         """Return list of databases configured in Superset (useful to pick database_id)."""
-        resp = self._request("GET", "api/v1/database/", timeout=30)
+        # Request a large page size to ensure we don't miss our database
+        import json
+        params = {"q": json.dumps({"page_size": 100})}
+        resp = self._request("GET", "api/v1/database/", params=params, timeout=30)
         resp.raise_for_status()
         return resp.json()
 
