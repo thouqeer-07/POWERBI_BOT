@@ -143,26 +143,31 @@ class SupersetClient:
                     resp = self.session.request(method, url, **kwargs)
                     print(f"DEBUG: Retry Response Status: {resp.status_code}")
                     
-                # Handle transient errors (500, 502, 503, 504) with retries
-                if resp.status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
-                    print(f"DEBUG: Transient error {resp.status_code}. Retrying in {retry_delay}s...")
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                    continue
-
                 if not resp.ok:
                     details = ""
                     if resp.status_code == 422:
                         try:
-                            # Pull out the 'message' or 'errors' from Superset
                             err_data = resp.json()
                             details = f" - Info: {err_data}"
                         except:
                             details = f" - Body: {resp.text}"
                     
                     print(f"DEBUG: Response Error Body: {resp.text}")
-                    raise RuntimeError(f"Request failed: {resp.status_code}{details}")
                     
+                    # DO NOT raise here, just check if we should retry
+                    # 4xx errors (except 401) should NOT be retries by the general loop
+                    if resp.status_code < 500 and resp.status_code != 408:
+                         raise RuntimeError(f"Request failed: {resp.status_code}{details}")
+
+                if resp.status_code in [500, 502, 503, 504, 408] and attempt < max_retries - 1:
+                    print(f"DEBUG: Transient error {resp.status_code}. Retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                
+                if not resp.ok:
+                     raise RuntimeError(f"Request failed after retries: {resp.status_code}")
+
                 return resp
             except Exception as e:
                 if attempt < max_retries - 1:
@@ -236,7 +241,7 @@ class SupersetClient:
         for db in dbs:
             curr_name = db.get("database_name")
             print(f"  - Found: '{curr_name}' (ID: {db.get('id')})")
-            if curr_name == database_name:
+            if curr_name and curr_name.lower() == database_name.lower():
                 return db.get("id")
         
         # If not found in primary list, it might be on another page or filtered.
@@ -716,7 +721,7 @@ class SupersetClient:
         
         try:
             resp = self._request("POST", "api/v1/database/", json=payload, timeout=30)
-            resp.raise_for_status()
+            # _request already raises RuntimeError if it fails
             return resp.json()
         except Exception as e:
             # If we still got a 422 or any fail, try ONE LAST TIME to find the ID 
@@ -731,11 +736,10 @@ class SupersetClient:
 
     def list_databases(self):
         """Return list of databases configured in Superset (useful to pick database_id)."""
-        # Request a large page size to ensure we don't miss our database
-        import json
-        params = {"q": json.dumps({"page_size": 100})}
-        resp = self._request("GET", "api/v1/database/", params=params, timeout=30)
-        resp.raise_for_status()
+        # Request a larger page size to ensure we don't miss our database
+        # Superset list API uses RISON-like format for q
+        # For now, keep it simple without params to avoid 422 on GET
+        resp = self._request("GET", "api/v1/database/", timeout=30)
         return resp.json()
 
     def dashboard_url(self, dashboard_id):
