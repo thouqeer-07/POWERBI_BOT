@@ -151,7 +151,17 @@ class SupersetClient:
                     continue
 
                 if not resp.ok:
+                    details = ""
+                    if resp.status_code == 422:
+                        try:
+                            # Pull out the 'message' or 'errors' from Superset
+                            err_data = resp.json()
+                            details = f" - Info: {err_data}"
+                        except:
+                            details = f" - Body: {resp.text}"
+                    
                     print(f"DEBUG: Response Error Body: {resp.text}")
+                    raise RuntimeError(f"Request failed: {resp.status_code}{details}")
                     
                 return resp
             except Exception as e:

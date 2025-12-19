@@ -245,18 +245,18 @@ st.title("Superset AI Assistant")
 # Sidebar for File Upload
 with st.sidebar:
     st.header("Data Upload")
-    # Try to find the 'PostgreSQL' database automatically
-    db_id = sup.get_database_id("PostgreSQL")
+    # Try to find the 'Supabase_Cloud' database automatically
+    db_id = sup.get_database_id("Supabase_Cloud")
     
     # Auto-register if missing
     if not db_id:
         with st.spinner("Connecting Superset to Database..."):
             try:
                 # Use DOCKER_DB_URI so Superset (in Docker) can reach the DB
-                sup.add_database("PostgreSQL", DOCKER_DB_URI)
-                st.success("Successfully added 'PostgreSQL' database to Superset!")
+                sup.add_database("Supabase_Cloud", DOCKER_DB_URI)
+                st.success("Successfully added 'Supabase_Cloud' database to Superset!")
                 time.sleep(1) # Wait a moment for consistency
-                db_id = sup.get_database_id("PostgreSQL")
+                db_id = sup.get_database_id("Supabase_Cloud")
             except Exception as e:
                 st.error(f"Failed to auto-connect database: {e}")
 
