@@ -201,7 +201,6 @@ class SupersetClient:
         If dataset already exists, try to find and return it.
         """
         # Try multiple payload shapes since Superset API expects either database id or object depending on version
-        # Try multiple payload shapes since Superset API expects either database id or object depending on version
         endpoints = ["api/v1/dataset", "api/v1/dataset/"]
         payloads = []
         # payload where database is an id
@@ -271,6 +270,7 @@ class SupersetClient:
                     ds_db_id = ds_db.get("id") if isinstance(ds_db, dict) else ds_db
                     
                     if int(ds_db_id) == int(database_id) and ds.get("table_name") == table_name:
+                        print(f"DEBUG: Found existing dataset ID: {ds.get('id')} for table {table_name}")
                         return ds
         except Exception as e:
             print(f"Warning: Could not search for existing dataset: {e}")
@@ -289,7 +289,10 @@ class SupersetClient:
             "datasource_id": int(dataset_id),
             "datasource_type": "table",
             "params": json.dumps(params or {}),
+            "owners": [1] # Default to admin user (usually ID 1) to avoid some 500 errors
         }
+        
+        print(f"DEBUG: Creating chart '{chart_name}' for dataset {dataset_id}...")
         
         try:
             # Note: Many Superset versions prefer/require the trailing slash
