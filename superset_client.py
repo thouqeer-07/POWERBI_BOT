@@ -115,6 +115,25 @@ class SupersetClient:
                 resp = self.session.request(method, url, allow_redirects=True, **kwargs)
                 print(f"DEBUG: Response Status: {resp.status_code}")
                 
+                # Log request details
+                if resp.status_code >= 400:
+                    try:
+                        error_json = resp.json()
+                        print(f"DEBUG: Response Body: {error_json}")
+                    except json.JSONDecodeError:
+                        print(f"DEBUG: Response Body: {resp.text}")
+                
+                # Specialized logging for 422 Unprocessable Entity
+                if resp.status_code == 422:
+                    print(f"❌ Superset 422 Error at {url}:")
+                    try:
+                        # Attempt to get payload from kwargs, prioritizing 'json' then 'data'
+                        payload_sent = kwargs.get('json') or kwargs.get('data')
+                        print(f"   Payload sent: {payload_sent}")
+                        print(f"   Detailed error info: {resp.json()}")
+                    except Exception:
+                        print(f"   Raw response: {resp.text}")
+                
                 # If 401, try to refresh token and retry once
                 if resp.status_code == 401:
                     print("DEBUG: Got 401, attempting to re-authenticate...")
@@ -665,7 +684,13 @@ class SupersetClient:
         return resp.json()
 
     def add_database(self, database_name, sqlalchemy_uri):
-        """Add a new database connection to Superset."""
+        """Add a new database connection to Superset, or return existing one if name matches."""
+        # 1. Check if it already exists to avoid 422 Unprocessable Entity (Duplicate)
+        existing_id = self.get_database_id(database_name)
+        if existing_id:
+            print(f"DEBUG: Database '{database_name}' already exists with ID {existing_id}. Skipping creation.")
+            return {"id": existing_id, "database_name": database_name, "message": "Already exists"}
+
         payload = {
             "database_name": database_name,
             "sqlalchemy_uri": sqlalchemy_uri
