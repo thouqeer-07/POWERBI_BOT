@@ -5,16 +5,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def get_config(key, default=None):
-    """Helper to get config from st.secrets (Cloud) or os.getenv (Local)"""
-    try:
-        import streamlit as st
-        # Use .get() or check membership safely
-        if hasattr(st, "secrets") and key in st.secrets:
-            return st.secrets[key]
-    except Exception:
-        pass
-    return os.getenv(key, default)
+import streamlit as st
+load_dotenv()
 
 
 class SupersetClient:
@@ -32,11 +24,11 @@ class SupersetClient:
     """
 
     def __init__(self, superset_url=None, api_key=None, username=None, password=None, database_id=None):
-        self.superset_url = (superset_url or get_config("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
-        self.api_key = api_key or get_config("SUPERSET_API_KEY")
-        self.username = username or get_config("SUPERSET_USERNAME")
-        self.password = password or get_config("SUPERSET_PASSWORD")
-        self.database_id = database_id or get_config("SUPERSET_DATABASE_ID")
+        self.superset_url = (superset_url or st.secrets.get("SUPERSET_URL") or os.getenv("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
+        self.api_key = api_key or st.secrets.get("SUPERSET_API_KEY") or os.getenv("SUPERSET_API_KEY")
+        self.username = username or st.secrets.get("SUPERSET_USERNAME") or os.getenv("SUPERSET_USERNAME")
+        self.password = password or st.secrets.get("SUPERSET_PASSWORD") or os.getenv("SUPERSET_PASSWORD")
+        self.database_id = database_id or st.secrets.get("SUPERSET_DATABASE_ID") or os.getenv("SUPERSET_DATABASE_ID")
         self._token = None
         self.session = requests.Session()
         self._csrf_token = None
@@ -256,7 +248,7 @@ class SupersetClient:
         # Connect directly to PostgreSQL for metadata (slices, charts, etc.)
         conn = None
         # We use a dedicated metadata URI if provided, otherwise default to local
-        metadata_db_uri = get_config("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Attempting metadata database connection...")
             conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
@@ -323,7 +315,7 @@ class SupersetClient:
         slug = dashboard_title.lower().replace(" ", "-").replace("_", "-")
         
         conn = None
-        metadata_db_uri = get_config("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Creating dashboard via database: {dashboard_title}")
             conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
@@ -380,7 +372,7 @@ class SupersetClient:
             raise RuntimeError("psycopg2 not installed")
         
         conn = None
-        metadata_db_uri = get_config("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Linking {len(chart_ids)} charts to dashboard {dashboard_id} via database...")
             conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
@@ -590,7 +582,7 @@ class SupersetClient:
             raise RuntimeError("psycopg2 not installed")
         
         conn = None
-        metadata_db_uri = get_config("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Deleting dashboard {dashboard_id} via database...")
             conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
