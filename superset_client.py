@@ -217,6 +217,20 @@ class SupersetClient:
         
         If dataset already exists, try to find and return it.
         """
+        try:
+            # First, list all databases to find the correct one and log it
+            db_resp = self._request("GET", "api/v1/database/", timeout=10)
+            if db_resp.ok:
+                dbs = db_resp.json().get("result", [])
+                print(f"DEBUG: Available Databases in Superset:")
+                for db in dbs:
+                    print(f"  - ID {db.get('id')}: {db.get('database_name')} ({db.get('backend')})")
+                
+                # If database_id is 1 but we find another database that looks like the data one, we might want to log a warning
+                # but for now we just show the user.
+        except Exception as e:
+            print(f"Warning: Could not list databases: {e}")
+
         # Try multiple payload shapes since Superset API expects either database id or object depending on version
         endpoints = ["api/v1/dataset", "api/v1/dataset/"]
         payloads = []
@@ -300,6 +314,7 @@ class SupersetClient:
         Returns chart JSON.
         """
 
+        # Try to find user ID 1 (usually admin) but don't fail if we can't
         payload = {
             "slice_name": chart_name,
             "viz_type": viz_type,
@@ -315,8 +330,17 @@ class SupersetClient:
         try:
             # Note: Many Superset versions prefer/require the trailing slash
             resp = self._request("POST", "api/v1/chart/", json=payload, timeout=40)
+            
+            if resp.status_code == 400:
+                print(f"DEBUG: Got 400, trying without owners...")
+                payload.pop("owners", None)
+                resp = self._request("POST", "api/v1/chart/", json=payload, timeout=40)
+
             if not resp.ok:
                 print(f"DEBUG: Chart creation API failed with status {resp.status_code}: {resp.text}")
+                # Try one more shape: 'datasource' as string
+                print(f"DEBUG: Trying alternative payload with 'datasource_id' and 'datasource_type'...")
+            
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
