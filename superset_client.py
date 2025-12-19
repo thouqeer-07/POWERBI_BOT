@@ -242,18 +242,13 @@ class SupersetClient:
         params_json = json.dumps(params or {})
         chart_uuid = str(uuid.uuid4())
         
-        # Connect directly to PostgreSQL (exposed on localhost:5432)
+        # Connect directly to PostgreSQL for metadata (slices, charts, etc.)
         conn = None
+        # We use a dedicated metadata URI if provided, otherwise default to local
+        metadata_db_uri = os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
-            print(f"Attempting database connection to localhost:5432...")
-            conn = psycopg2.connect(
-                host="localhost",
-                port=5432,
-                database="superset",
-                user="superset",
-                password="superset_password",
-                connect_timeout=5
-            )
+            print(f"Attempting metadata database connection...")
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
             print(f"✅ Connected to database")
             
             cursor = conn.cursor()
@@ -317,16 +312,10 @@ class SupersetClient:
         slug = dashboard_title.lower().replace(" ", "-").replace("_", "-")
         
         conn = None
+        metadata_db_uri = os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Creating dashboard via database: {dashboard_title}")
-            conn = psycopg2.connect(
-                host="localhost",
-                port=5432,
-                database="superset",
-                user="superset",
-                password="superset_password",
-                connect_timeout=5
-            )
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
             
             cursor = conn.cursor()
             
@@ -380,16 +369,10 @@ class SupersetClient:
             raise RuntimeError("psycopg2 not installed")
         
         conn = None
+        metadata_db_uri = os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Linking {len(chart_ids)} charts to dashboard {dashboard_id} via database...")
-            conn = psycopg2.connect(
-                host="localhost",
-                port=5432,
-                database="superset",
-                user="superset",
-                password="superset_password",
-                connect_timeout=5
-            )
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
             cursor = conn.cursor()
             
             # 1. Create position_json with charts
@@ -596,16 +579,10 @@ class SupersetClient:
             raise RuntimeError("psycopg2 not installed")
         
         conn = None
+        metadata_db_uri = os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Deleting dashboard {dashboard_id} via database...")
-            conn = psycopg2.connect(
-                host="localhost",
-                port=5432,
-                database="superset",
-                user="superset",
-                password="superset_password",
-                connect_timeout=5
-            )
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
             cursor = conn.cursor()
             
             # Delete from dashboard_slices (linking table) first

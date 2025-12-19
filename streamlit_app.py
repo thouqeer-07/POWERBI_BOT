@@ -28,9 +28,9 @@ client = InferenceClient(model=LLAMA_MODEL_ID, token=HF_TOKEN)
 
 from superset_client import SupersetClient
 
-# Database connection string (Postgres exposed on localhost:5432)
-DB_URI = "postgresql://superset:superset_password@localhost:5432/superset"
-# URI for Superset container to reach the DB container (replace localhost with service name 'db')
+# Database connection string from environment (fallback to local if not set)
+DB_URI = os.getenv("DB_URI", "postgresql://superset:superset_password@localhost:5432/superset")
+# URI for Superset container to reach the DB container (replace localhost with service name 'db' if applicable)
 DOCKER_DB_URI = DB_URI.replace("localhost", "db")
 
 # Initialize Superset Client
