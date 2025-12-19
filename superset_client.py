@@ -292,12 +292,17 @@ class SupersetClient:
         }
         
         try:
-            resp = self._request("POST", "api/v1/chart", json=payload, timeout=30)
+            # Note: Many Superset versions prefer/require the trailing slash
+            resp = self._request("POST", "api/v1/chart/", json=payload, timeout=40)
+            if not resp.ok:
+                print(f"DEBUG: Chart creation API failed with status {resp.status_code}: {resp.text}")
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
             # Fallback: use direct database insertion
             print(f"API chart creation failed: {e}. Trying database-direct method...")
+            if "relation \"slices\" does not exist" in str(e) or "psycopg2" in str(e):
+                 print("TIP: If you are on Streamlit Cloud, you MUST set SUPERSET_METADATA_DB_URI to your Superset database URI for this fallback to work.")
             return self._create_chart_direct(dataset_id, chart_name, viz_type, params)
     
     def _create_chart_direct(self, dataset_id, chart_name, viz_type, params=None):
@@ -359,7 +364,7 @@ class SupersetClient:
         }
         
         try:
-            resp = self._request("POST", "api/v1/dashboard", json=payload, timeout=30)
+            resp = self._request("POST", "api/v1/dashboard/", json=payload, timeout=30)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
@@ -525,7 +530,7 @@ class SupersetClient:
         chart_details = []
         for c_id in chart_ids:
             try:
-                 c_resp = self._request("GET", f"api/v1/chart/{c_id}", timeout=10)
+                 c_resp = self._request("GET", f"api/v1/chart/{c_id}/", timeout=10)
                  if c_resp.ok:
                      chart_details.append(c_resp.json().get("result"))
             except Exception as e:
@@ -585,7 +590,7 @@ class SupersetClient:
         
         # 4. Update Dashboard FIRST
         print(f"DEBUG: Updating dashboard {dashboard_id} with position_json...")
-        resp = self._request("PUT", f"api/v1/dashboard/{dashboard_id}", json=payload, timeout=30)
+        resp = self._request("PUT", f"api/v1/dashboard/{dashboard_id}/", json=payload, timeout=30)
         
         if not resp.ok:
             print(f"DEBUG: Dashboard update failed: {resp.text}")
@@ -596,7 +601,7 @@ class SupersetClient:
         print(f"DEBUG: Linking {len(chart_ids)} charts to dashboard {dashboard_id}...")
         for c_id in chart_ids:
             try:
-                self._request("PUT", f"api/v1/chart/{c_id}", json={"dashboards": [int(dashboard_id)]}, timeout=10)
+                self._request("PUT", f"api/v1/chart/{c_id}/", json={"dashboards": [int(dashboard_id)]}, timeout=10)
             except Exception as e:
                 print(f"Warning: Failed to link chart {c_id} to dashboard: {e}")
 
@@ -629,7 +634,7 @@ class SupersetClient:
     def delete_dashboard(self, dashboard_id):
         """Delete a dashboard by ID."""
         try:
-            resp = self._request("DELETE", f"api/v1/dashboard/{dashboard_id}", timeout=30)
+            resp = self._request("DELETE", f"api/v1/dashboard/{dashboard_id}/", timeout=30)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
