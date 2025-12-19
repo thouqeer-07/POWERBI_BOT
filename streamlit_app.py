@@ -19,8 +19,13 @@ import requests
 from huggingface_hub import InferenceClient
 # Helper to get config from st.secrets (Cloud) or os.getenv (Local)
 def get_config(key, default=None):
-    if key in st.secrets:
-        return st.secrets[key]
+    try:
+        # Check st.secrets first (Streamlit Cloud)
+        if key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+    # Fallback to os.getenv (Local)
     return os.getenv(key, default)
 
 # Load environment variables

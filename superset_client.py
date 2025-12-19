@@ -9,9 +9,10 @@ def get_config(key, default=None):
     """Helper to get config from st.secrets (Cloud) or os.getenv (Local)"""
     try:
         import streamlit as st
-        if key in st.secrets:
+        # Use .get() or check membership safely
+        if hasattr(st, "secrets") and key in st.secrets:
             return st.secrets[key]
-    except ImportError:
+    except Exception:
         pass
     return os.getenv(key, default)
 
