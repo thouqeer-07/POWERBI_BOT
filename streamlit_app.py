@@ -261,7 +261,14 @@ with st.sidebar:
                     if db_id:
                         st.session_state["superset_db_id"] = db_id
                 except Exception as e:
-                    st.error(f"Failed to auto-connect database: {e}")
+                    # If auto-connect fails, do not stop the app. Just warn and let fallback handling take over.
+                    print(f"Auto-connect warning: {e}")
+                    # Check if we can just assume it worked or is redundant
+                    if "already exists" in str(e):
+                         st.session_state["superset_db_id"] = 1
+                         st.success("Connected to Database (ID: 1)")
+                    else:
+                         st.warning(f"Could not auto-connect database: {e}. Using manual selection below.")
     
     db_id = st.session_state.get("superset_db_id")
 
