@@ -375,32 +375,48 @@ class SupersetClient:
     def _find_dataset(self, database_id, table_name):
         """Helper to find a dataset by db and table name."""
         try:
-        try:
-            # Use server-side filtering for robust lookup
+            # 1. Try Server-Side Filtering (Fastest)
             import json
             filters = [{"col": "table_name", "opr": "eq", "value": table_name}]
             params = {"q": json.dumps({"filters": filters})}
             
+            print(f"DEBUG: Searching for dataset '{table_name}' via API filter...")
             resp = self._request("GET", "api/v1/dataset/", params=params, timeout=30)
+            
+            found_ds = None
             if resp.ok:
                 datasets = resp.json().get("result", [])
-                print(f"DEBUG: _find_dataset searching for DB={database_id} Table={table_name} in {len(datasets)} datasets...")
                 for ds in datasets:
-                    # Check if it matches
-                    # Note: 'database' field in list response might be an object or id
-                    ds_db = ds.get("database", {})
-                    ds_db_id = ds_db.get("id") if isinstance(ds_db, dict) else ds_db
-                    
-                    # Log comparison for debugging
-                    # print(f"DEBUG: Checking Dataset {ds.get('id')}: DB={ds_db_id} Table={ds.get('table_name')}")
-
-                    if str(ds_db_id) == str(database_id) and ds.get("table_name") == table_name:
-                        print(f"DEBUG: Found existing dataset ID: {ds.get('id')} for table {table_name}")
+                     if self._check_dataset_match(ds, database_id, table_name):
+                         return ds
+            
+            # 2. Fallback: Brute Force Iteration (Reliable)
+            print("DEBUG: Filtered search returned nothing. Trying brute-force iteration (page_size=2000)...")
+            params = {"q": json.dumps({"page_size": 2000})} # Get EVERYTHING
+            resp = self._request("GET", "api/v1/dataset/", params=params, timeout=45)
+            
+            if resp.ok:
+                datasets = resp.json().get("result", [])
+                print(f"DEBUG: Scanned {len(datasets)} datasets manually...")
+                for ds in datasets:
+                    if self._check_dataset_match(ds, database_id, table_name):
                         return ds
-                print("DEBUG: Dataset not found in list.")
+
         except Exception as e:
             print(f"Warning: Could not search for existing dataset: {e}")
         return None
+
+    def _check_dataset_match(self, ds, database_id, table_name):
+        """Helper to check if a dataset dict matches our target."""
+        ds_db = ds.get("database", {})
+        ds_db_id = ds_db.get("id") if isinstance(ds_db, dict) else ds_db
+        
+        # print(f"DEBUG: Checking {ds.get('table_name')} (DB {ds_db_id})...")
+        
+        if str(ds_db_id) == str(database_id) and ds.get("table_name") == table_name:
+            print(f"DEBUG: Found existing dataset ID: {ds.get('id')} for table {table_name}")
+            return True
+        return False
 
     def create_chart(self, dataset_id, chart_name, viz_type, params=None):
         """Create a chart (slice) referencing a dataset.
