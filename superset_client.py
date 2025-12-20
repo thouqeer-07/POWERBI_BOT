@@ -408,13 +408,13 @@ class SupersetClient:
             if direct_result:
                 return direct_result
 
-            # 4. NUCLEAR OPTION: Fast Probe (IDs 1-20)
+            # 4. NUCLEAR OPTION: Fast Probe (IDs 1-50)
             # If DB query failed (connection issues) and List failed (visibility), 
-            # we blindly check the first 20 IDs.
-            print("DEBUG: Direct DB failed. Probing first 20 Dataset IDs via API...")
-            for probe_id in range(1, 21):
+            # we blindly check the reported IDs.
+            print("DEBUG: Direct DB failed. Probing first 50 Dataset IDs via API...")
+            for probe_id in range(1, 51):
                  try:
-                     resp = self._request("GET", f"api/v1/dataset/{probe_id}", timeout=2)
+                     resp = self._request("GET", f"api/v1/dataset/{probe_id}", timeout=1)
                      if resp.ok:
                          ds = resp.json().get("result", {})
                          if self._check_dataset_match(ds, database_id, table_name):
@@ -460,7 +460,8 @@ class SupersetClient:
         
         # print(f"DEBUG: Checking {ds.get('table_name')} (DB {ds_db_id})...")
         
-        if str(ds_db_id) == str(database_id) and ds.get("table_name") == table_name:
+        ds_table = ds.get("table_name")
+        if str(ds_db_id) == str(database_id) and ds_table and ds_table.lower() == table_name.lower():
             print(f"DEBUG: Found existing dataset ID: {ds.get('id')} for table {table_name}")
             return True
         return False
