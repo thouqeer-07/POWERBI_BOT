@@ -401,10 +401,41 @@ class SupersetClient:
                 for ds in datasets:
                     if self._check_dataset_match(ds, database_id, table_name):
                         return ds
+            
+            # 3. Last Resort: Direct Database Query (Bypasses API visibility issues)
+            print("DEBUG: API search failed. Trying direct Metadata DB query...")
+            return self._find_dataset_direct(database_id, table_name)
 
         except Exception as e:
             print(f"Warning: Could not search for existing dataset: {e}")
         return None
+
+    def _find_dataset_direct(self, database_id, table_name):
+        """Query the Superset metadata database directly to find the table ID."""
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+            
+            # Query the 'tables' table (standard Superset model)
+            sql = "SELECT id FROM tables WHERE table_name = %s AND database_id = %s"
+            cursor.execute(sql, (table_name, int(database_id)))
+            result = cursor.fetchone()
+            
+            cursor.close()
+            conn.close()
+            
+            if result:
+                 d_id = result[0]
+                 print(f"✅ Found existing dataset ID via DB: {d_id}")
+                 # Return a minimal dict that satisfies downstream code
+                 return {"id": d_id, "table_name": table_name, "database": {"id": int(database_id)}}
+            
+            print("DEBUG: Dataset not found in metadata DB.")
+            return None
+            
+        except Exception as e:
+            print(f"Warning: Direct DB dataset lookup failed: {e}")
+            return None
 
     def _check_dataset_match(self, ds, database_id, table_name):
         """Helper to check if a dataset dict matches our target."""
