@@ -338,10 +338,19 @@ class SupersetClient:
                 except Exception as e:
                     # Check for "already exists" inside the exception
                     if "already exists" in str(e) or "422" in str(e):
-                         print("DEBUG: Dataset already exists (caught exception). Fetching existing dataset...")
-                         existing_ds = self._find_dataset(database_id, table_name)
-                         if existing_ds:
-                             return existing_ds
+                          print("DEBUG: Dataset already exists (caught exception). Fetching existing dataset...")
+                          
+                          # Try to extract ID from error message if present (rare but possible)
+                          import re
+                          match = re.search(r'Dataset\s+(\d+)\s+already exists', str(e))
+                          if match:
+                              found_id = match.group(1)
+                              print(f"DEBUG: Extracted ID {found_id} from error message!")
+                              return {"id": int(found_id), "table_name": table_name, "database": {"id": database_id}}
+
+                          existing_ds = self._find_dataset(database_id, table_name)
+                          if existing_ds:
+                              return existing_ds
                     
                     print(f"Request failed for endpoint={endpoint} payload={payload}: {e}")
                     errors.append(f"{endpoint} + {payload} => {e}")
