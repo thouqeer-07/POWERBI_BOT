@@ -434,8 +434,8 @@ class SupersetClient:
                     print(f"DEBUG: Probe ID {pid} error: {e}")
                 return None
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=25) as executor:
-                futures = {executor.submit(check_id, i): i for i in range(1, 501)}
+            with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+                futures = {executor.submit(check_id, i): i for i in range(1, 1001)}
                 for future in concurrent.futures.as_completed(futures):
                     result = future.result()
                     if result:
