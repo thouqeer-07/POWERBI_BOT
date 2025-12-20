@@ -31,7 +31,10 @@ class SupersetClient:
         def get_conf(key, default=None):
             val = None
             if st and hasattr(st, "secrets"):
-                val = st.secrets.get(key)
+                try:
+                    val = st.secrets.get(key)
+                except Exception:
+                    pass
             return val or os.getenv(key) or default
 
         self.superset_url = (superset_url or get_conf("SUPERSET_PUBLIC_URL") or get_conf("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
@@ -408,19 +411,32 @@ class SupersetClient:
             if direct_result:
                 return direct_result
 
-            # 4. NUCLEAR OPTION: Fast Probe (IDs 1-50)
+            # 4. NUCLEAR OPTION: Fast Parallel Probe (IDs 1-200)
             # If DB query failed (connection issues) and List failed (visibility), 
-            # we blindly check the reported IDs.
-            print("DEBUG: Direct DB failed. Probing first 50 Dataset IDs via API...")
-            for probe_id in range(1, 51):
-                 try:
-                     resp = self._request("GET", f"api/v1/dataset/{probe_id}", timeout=1)
-                     if resp.ok:
-                         ds = resp.json().get("result", {})
-                         if self._check_dataset_match(ds, database_id, table_name):
-                             return ds
-                 except Exception:
-                     pass
+            # we blindly check IDs in parallel.
+            print("DEBUG: Direct DB failed. Probing IDs 1-200 via API (Parallel)...")
+            
+            import concurrent.futures
+
+            def check_id(pid):
+                try:
+                    # Short timeout, we want speed
+                    r = self._request("GET", f"api/v1/dataset/{pid}", timeout=2)
+                    if r.ok:
+                        d = r.json().get("result", {})
+                        if self._check_dataset_match(d, database_id, table_name):
+                            return d
+                except:
+                    pass
+                return None
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+                futures = {executor.submit(check_id, i): i for i in range(1, 201)}
+                for future in concurrent.futures.as_completed(futures):
+                    result = future.result()
+                    if result:
+                        print(f"✅ Found dataset via Parallel Probe: ID {result.get('id')}")
+                        return result
 
         except Exception as e:
             print(f"Warning: Could not search for existing dataset: {e}")
