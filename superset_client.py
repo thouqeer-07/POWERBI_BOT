@@ -329,8 +329,9 @@ class SupersetClient:
     def _find_dataset(self, database_id, table_name):
         """Helper to find a dataset by db and table name."""
         try:
-            # This is inefficient but works for small setups
-            resp = self._request("GET", "api/v1/dataset/", timeout=30)
+            # Request a larger page size to ensure we find the dataset
+            params = {"q": json.dumps({"page_size": 100})}
+            resp = self._request("GET", "api/v1/dataset/", params=params, timeout=30)
             if resp.ok:
                 datasets = resp.json().get("result", [])
                 print(f"DEBUG: _find_dataset searching for DB={database_id} Table={table_name} in {len(datasets)} datasets...")
