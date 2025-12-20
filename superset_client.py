@@ -411,10 +411,10 @@ class SupersetClient:
             if direct_result:
                 return direct_result
 
-            # 4. NUCLEAR OPTION: Fast Parallel Probe (IDs 1-200)
+            # 4. NUCLEAR OPTION: Fast Parallel Probe (IDs 1-500)
             # If DB query failed (connection issues) and List failed (visibility), 
             # we blindly check IDs in parallel.
-            print("DEBUG: Direct DB failed. Probing IDs 1-200 via API (Parallel)...")
+            print("DEBUG: Direct DB failed. Probing IDs 1-500 via API (Parallel)...")
             
             import concurrent.futures
 
@@ -426,12 +426,16 @@ class SupersetClient:
                         d = r.json().get("result", {})
                         if self._check_dataset_match(d, database_id, table_name):
                             return d
-                except:
-                    pass
+                    else:
+                        # Log non-404 errors to help debug
+                        if r.status_code != 404:
+                            print(f"DEBUG: Probe ID {pid} failed: {r.status_code}")
+                except Exception as e:
+                    print(f"DEBUG: Probe ID {pid} error: {e}")
                 return None
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-                futures = {executor.submit(check_id, i): i for i in range(1, 201)}
+            with concurrent.futures.ThreadPoolExecutor(max_workers=25) as executor:
+                futures = {executor.submit(check_id, i): i for i in range(1, 501)}
                 for future in concurrent.futures.as_completed(futures):
                     result = future.result()
                     if result:
