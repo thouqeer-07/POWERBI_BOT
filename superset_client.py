@@ -233,19 +233,43 @@ class SupersetClient:
         return resp.json()
 
     def get_database_id(self, database_name):
-        """Find database ID by name."""
+        """Find database ID by name using server-side filtering."""
+        import json
+        
+        # Use Rison/JSON filter to find exact match on server side
+        # This avoids pagination issues
+        filters = [
+            {
+                "col": "database_name",
+                "opr": "eq",
+                "value": database_name
+            }
+        ]
+        params = {"q": json.dumps({"filters": filters})}
+        
+        try:
+            print(f"DEBUG: Searching for database '{database_name}' via API filter...")
+            resp = self._request("GET", "api/v1/database/", params=params, timeout=30)
+            if resp.ok:
+                dbs = resp.json().get("result", [])
+                for db in dbs:
+                     if db.get("database_name") == database_name:
+                         print(f"  - Found: '{database_name}' (ID: {db.get('id')})")
+                         return db.get("id")
+        except Exception as e:
+            print(f"Warning: Database filtered search failed: {e}")
+
+        # Fallback: List all (up to limit) and text search
         resp = self.list_databases()
         dbs = resp.get("result", [])
         
-        print(f"DEBUG: Searching for database '{database_name}' in {len(dbs)} registered databases...")
+        print(f"DEBUG: Searching for database '{database_name}' in {len(dbs)} registered databases (fallback)...")
         for db in dbs:
             curr_name = db.get("database_name")
-            print(f"  - Found: '{curr_name}' (ID: {db.get('id')})")
+            # print(f"  - Found: '{curr_name}' (ID: {db.get('id')})")
             if curr_name and curr_name.lower() == database_name.lower():
                 return db.get("id")
         
-        # If not found in primary list, it might be on another page or filtered.
-        # But for now, returning None.
         return None
 
     def create_dataset(self, database_id, schema, table_name, dataset_name=None):
@@ -745,7 +769,7 @@ class SupersetClient:
         """Return list of databases configured in Superset (useful to pick database_id)."""
         import json
         # Request a larger page size to ensure we don't miss our database if many exist
-        params = {"q": json.dumps({"page_size": 200})}
+        params = {"q": json.dumps({"page_size": 2000})}
         resp = self._request("GET", "api/v1/database/", params=params, timeout=30)
         return resp.json()
 
