@@ -742,10 +742,10 @@ class SupersetClient:
 
     def list_databases(self):
         """Return list of databases configured in Superset (useful to pick database_id)."""
-        # Request a larger page size to ensure we don't miss our database
-        # Superset list API uses RISON-like format for q
-        # For now, keep it simple without params to avoid 422 on GET
-        resp = self._request("GET", "api/v1/database/", timeout=30)
+        import json
+        # Request a larger page size to ensure we don't miss our database if many exist
+        params = {"q": json.dumps({"page_size": 200})}
+        resp = self._request("GET", "api/v1/database/", params=params, timeout=30)
         return resp.json()
 
     def dashboard_url(self, dashboard_id):
