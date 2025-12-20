@@ -333,6 +333,13 @@ class SupersetClient:
                     print(f"DEBUG: Attempting create_dataset at {endpoint} with payload {payload}")
                     resp = self._request("POST", endpoint, json=payload, timeout=30)
                 except Exception as e:
+                    # Check for "already exists" inside the exception
+                    if "already exists" in str(e) or "422" in str(e):
+                         print("DEBUG: Dataset already exists (caught exception). Fetching existing dataset...")
+                         existing_ds = self._find_dataset(database_id, table_name)
+                         if existing_ds:
+                             return existing_ds
+                    
                     print(f"Request failed for endpoint={endpoint} payload={payload}: {e}")
                     errors.append(f"{endpoint} + {payload} => {e}")
                     continue
@@ -368,8 +375,12 @@ class SupersetClient:
     def _find_dataset(self, database_id, table_name):
         """Helper to find a dataset by db and table name."""
         try:
-            # Request a larger page size to ensure we find the dataset
-            params = {"q": json.dumps({"page_size": 100})}
+        try:
+            # Use server-side filtering for robust lookup
+            import json
+            filters = [{"col": "table_name", "opr": "eq", "value": table_name}]
+            params = {"q": json.dumps({"filters": filters})}
+            
             resp = self._request("GET", "api/v1/dataset/", params=params, timeout=30)
             if resp.ok:
                 datasets = resp.json().get("result", [])
