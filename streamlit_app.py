@@ -266,7 +266,7 @@ with st.sidebar:
                     # Check if we can just assume it worked or is redundant
                     if "already exists" in str(e):
                          st.session_state["superset_db_id"] = 1
-                         st.success("Connected to Database (ID: 1)")
+                         # Success message will be shown below by the main check
                     else:
                          st.warning(f"Could not auto-connect database: {e}. Using manual selection below.")
     
