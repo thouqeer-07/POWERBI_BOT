@@ -270,6 +270,21 @@ class SupersetClient:
             if curr_name and curr_name.lower() == database_name.lower():
                 return db.get("id")
         
+        # LAST RESORT: Probe IDs 1-5 directly (Bypasses list visibility bugs)
+        print(f"DEBUG: Probing first 5 database IDs explicitly...")
+        for probe_id in range(1, 6):
+             try:
+                 # endpoint is usually api/v1/database/{id}
+                 resp = self._request("GET", f"api/v1/database/{probe_id}", timeout=5)
+                 if resp.ok:
+                     data = resp.json().get("result", {})
+                     db_name = data.get("database_name")
+                     if db_name and db_name.lower() == database_name.lower():
+                         print(f"  - Found via PROBE: '{db_name}' (ID: {probe_id})")
+                         return probe_id
+             except Exception:
+                 pass
+
         return None
 
     def create_dataset(self, database_id, schema, table_name, dataset_name=None):
