@@ -375,6 +375,10 @@ if "dashboard_plan" in st.session_state:
             st.write("I've analyzed your data and prepared the following charts. You can edit them before we build the dashboard.")
             plan = st.session_state["dashboard_plan"]
             updated_plan = []
+            
+            # Placeholder for status at the TOP
+            creation_status_container = st.empty()
+            
             with st.form("dashboard_review_form"):
                 for i, chart in enumerate(plan):
                     st.subheader(f"Chart {i+1}")
@@ -409,8 +413,10 @@ if "dashboard_plan" in st.session_state:
                         })
                     st.divider()
                 submitted = st.form_submit_button("🚀 Create Dashboard")
+                
                 if submitted:
-                    status = st.status("Building Dashboard...", expanded=True)
+                    with creation_status_container:
+                        status = st.status("Building Dashboard...", expanded=True)
                     try:
                         dataset_id = st.session_state.get("current_dataset_id")
                         db_id = st.session_state.get("superset_db_id")

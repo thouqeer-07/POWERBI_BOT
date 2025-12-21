@@ -856,26 +856,6 @@ class SupersetClient:
         resp.raise_for_status()
         return resp.json()
 
-    def get_dashboard(self, dashboard_id):
-        """Get full dashboard details including charts."""
-        resp = self._request("GET", f"api/v1/dashboard/{dashboard_id}", timeout=10)
-        return resp.json() if resp.ok else None
-
-    def delete_dashboard(self, dashboard_id):
-        print(f"DEBUG: Deleting dashboard {dashboard_id}...")
-        resp = self._request("DELETE", f"api/v1/dashboard/{dashboard_id}", timeout=10)
-        return resp.ok
-
-    def delete_chart(self, chart_id):
-        print(f"DEBUG: Deleting chart {chart_id}...")
-        resp = self._request("DELETE", f"api/v1/chart/{chart_id}", timeout=10)
-        return resp.ok
-
-    def delete_dataset(self, dataset_id):
-        print(f"DEBUG: Deleting dataset {dataset_id}...")
-        resp = self._request("DELETE", f"api/v1/dataset/{dataset_id}", timeout=10)
-        return resp.ok
-
     def add_database(self, database_name, sqlalchemy_uri):
         """Add a new database connection to Superset, or return existing one if name matches."""
         # 1. Check if it already exists to avoid 422 Unprocessable Entity (Duplicate)
