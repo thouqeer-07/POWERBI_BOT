@@ -278,7 +278,8 @@ class SupersetClient:
         for probe_id in range(1, 6):
              try:
                  # endpoint is usually api/v1/database/{id}
-                 resp = self._request("GET", f"api/v1/database/{probe_id}", timeout=1)
+                 # Disable retries for probing to fail FAST on 404
+                 resp = self._request("GET", f"api/v1/database/{probe_id}", timeout=2, retries=0)
                  if resp.ok:
                      data = resp.json().get("result", {})
                      db_name = data.get("database_name")
