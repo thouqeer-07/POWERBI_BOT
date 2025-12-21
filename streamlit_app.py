@@ -55,6 +55,11 @@ except Exception as e:
     st.error(f"Failed to initialize Superset Client: {e}")
     st.stop()
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_cached_database_id(db_name):
+    """Cache the database ID lookup to avoid repeated API calls on startup."""
+    return sup.get_database_id(db_name)
+
 def render_fullscreen_iframe(url, height=800):
     """Render an iframe with a custom Full Screen toggle button."""
     
@@ -247,7 +252,8 @@ with st.sidebar:
     st.header("Data Upload")
     # Try to find the 'Supabase_Cloud' database automatically (using session_state to avoid redundant API calls)
     if "superset_db_id" not in st.session_state:
-        db_id = sup.get_database_id("Supabase_Cloud")
+        # Use cached lookup for speed (instant if previously found)
+        db_id = get_cached_database_id("Supabase_Cloud")
         if db_id:
             st.session_state["superset_db_id"] = db_id
         else:
