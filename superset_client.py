@@ -108,7 +108,9 @@ class SupersetClient:
             kwargs["headers"] = self._auth_headers()
             
         import time
-        max_retries = 3
+        # Allow retries to be configured (default 3)
+        # We pop it from kwargs so it doesn't get passed to requests.request
+        max_retries = kwargs.pop("retries", 3)
         retry_delay = 2 # seconds
         
         for attempt in range(max_retries):
