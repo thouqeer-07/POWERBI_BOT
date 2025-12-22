@@ -389,10 +389,10 @@ if "dashboard_plan" in st.session_state:
         if c2.button("Reject & Delete"):
                 dash_id = st.session_state.get("created_dashboard_id")
                 try:
-                sup.delete_dashboard(dash_id)
-                st.warning("Dashboard deleted. You can modify the plan below.")
+                    sup.delete_dashboard(dash_id)
+                    st.warning("Dashboard deleted. You can modify the plan below.")
                 except Exception as e:
-                st.error(f"Failed to delete dashboard: {e}")
+                    st.error(f"Failed to delete dashboard: {e}")
                 
                 del st.session_state["waiting_for_dashboard_confirmation"]
                 st.rerun()
