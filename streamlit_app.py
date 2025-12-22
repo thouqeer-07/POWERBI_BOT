@@ -346,7 +346,9 @@ if "messages" not in st.session_state:
 
 # --- Dashboard Generation UI (Moved to Top) ---
 if "dashboard_plan" in st.session_state:
-    with st.expander("📊 Review Dashboard Plan", expanded=True):
+    with st.container(border=True):
+        st.write("DEBUG: LOWER BLOCK (Line 348)")
+        with st.expander("📊 Review Dashboard Plan", expanded=True):
         if st.session_state.get("waiting_for_dashboard_confirmation"):
             st.header("✅ Dashboard Created!")
             st.write("Please review the dashboard below.")
@@ -507,6 +509,7 @@ if "dashboard_plan" in st.session_state:
                         status.error("No charts were successfully created.")
                 except Exception as e:
                     status.error(f"Process failed: {e}")
+
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
