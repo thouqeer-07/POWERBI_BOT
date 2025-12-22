@@ -403,8 +403,7 @@ if "dashboard_plan" in st.session_state:
     elif st.session_state.get("is_building_dashboard"):
             status = st.status("Building Dashboard...", expanded=True)
             try:
-                # Clean up temp state instantly to prevent stuck loop
-                if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
+                # Do NOT clean up temp state instantly. Wait for success or error.
                 
                 updated_plan = st.session_state.get("pending_dashboard_plan", [])
                 dataset_id = st.session_state.get("current_dataset_id")
@@ -417,6 +416,7 @@ if "dashboard_plan" in st.session_state:
                         dataset_id = ds.get("id")
                     except Exception as e:
                         status.error(f"Could not ensure dataset: {e}")
+                        if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"] # Reset on critical error
                         st.stop()
                 
                 created_chart_ids = []
@@ -486,11 +486,19 @@ if "dashboard_plan" in st.session_state:
                     st.session_state["created_dashboard_id"] = dash_id
                     st.session_state["created_dashboard_url"] = dash_url
                     st.session_state["waiting_for_dashboard_confirmation"] = True
+                    
+                    # Cleanup flag primarily on SUCCESS
+                    if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
+                    
                     st.rerun() 
                 else:
                     status.error("No charts were successfully created.")
+                    # Allow retry
+                    if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
             except Exception as e:
                 status.error(f"Process failed: {e}")
+                # Allow retry
+                if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
 
     # ---------------------------------------------------------
     # STATE 3: INPUT FORM (Default)
