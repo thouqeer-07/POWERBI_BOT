@@ -345,10 +345,13 @@ if "messages" not in st.session_state:
 
 
 # --- Dashboard Generation UI (Moved to Top) ---
+# --- Dashboard Generation UI (State Machine) ---
 if "dashboard_plan" in st.session_state:
-    st.warning("DEBUG: LOWER BLOCK (Line 348)")
     with st.expander("📊 Review Dashboard Plan", expanded=True):
+        
+        # ---------------------------------------------------------
         # STATE 1: SUCCESS (Dashboard Created)
+        # ---------------------------------------------------------
         if st.session_state.get("waiting_for_dashboard_confirmation"):
             st.header("✅ Dashboard Created!")
             st.write("Please review the dashboard below.")
@@ -360,9 +363,12 @@ if "dashboard_plan" in st.session_state:
                  msg = f"I've created a new dashboard! You can view it here: [Dashboard Link]({dash_url})"
                  st.session_state.messages.append({"role": "assistant", "content": msg, "chart_url": dash_url})
                  
+                 # Cleanup State
                  del st.session_state["dashboard_plan"]
                  del st.session_state["waiting_for_dashboard_confirmation"]
                  if "pending_dashboard_plan" in st.session_state: del st.session_state["pending_dashboard_plan"]
+                 if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
+                 
                  st.success("Dashboard finalized!")
                  st.rerun()
             
@@ -377,11 +383,13 @@ if "dashboard_plan" in st.session_state:
                  del st.session_state["waiting_for_dashboard_confirmation"]
                  st.rerun()
 
-        # STATE 2: BUILDING (Processing)
+        # ---------------------------------------------------------
+        # STATE 2: BUILDING (Processing - No Form Visible)
+        # ---------------------------------------------------------
         elif st.session_state.get("is_building_dashboard"):
              status = st.status("Building Dashboard...", expanded=True)
              try:
-                 # Clean up temp state
+                 # Clean up temp state instantly to prevent stuck loop
                  if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
                  
                  updated_plan = st.session_state.get("pending_dashboard_plan", [])
@@ -401,7 +409,7 @@ if "dashboard_plan" in st.session_state:
                  for chart in updated_plan:
                      status.write(f"Creating chart: {chart['title']}...")
                      viz_map = {
-                         "dist_bar": "echarts_timeseries_bar", # Superset 3.x+ preferred
+                         "dist_bar": "echarts_timeseries_bar", 
                          "bar": "echarts_timeseries_bar",
                          "line": "echarts_timeseries_line",
                          "pie": "pie",
@@ -417,7 +425,6 @@ if "dashboard_plan" in st.session_state:
                          "legendType": "scroll"
                      }
                      
-                     # Metric Spec Construction
                      if chart["metric"].lower() == "count":
                          metric_spec = "count"
                      else:
@@ -428,7 +435,6 @@ if "dashboard_plan" in st.session_state:
                              "label": f"{chart['agg_func']} of {chart['metric']}"
                          }
                      
-                     # Viz Specific Params
                      if actual_viz == "big_number_total":
                          params["metric"] = metric_spec
                          params["subheader"] = ""
@@ -463,7 +469,6 @@ if "dashboard_plan" in st.session_state:
                      dash_url = sup.dashboard_url(dash_id)
                      status.update(label="Dashboard Created!", state="complete", expanded=False)
                      
-                     # Store state and request confirmation
                      st.session_state["created_dashboard_id"] = dash_id
                      st.session_state["created_dashboard_url"] = dash_url
                      st.session_state["waiting_for_dashboard_confirmation"] = True
@@ -473,7 +478,9 @@ if "dashboard_plan" in st.session_state:
              except Exception as e:
                  status.error(f"Process failed: {e}")
 
-        # STATE 3: INPUT form
+        # ---------------------------------------------------------
+        # STATE 3: INPUT FORM (Default)
+        # ---------------------------------------------------------
         else:
             st.header("📊 Dashboard Plan Review")
             st.write("I've analyzed your data and prepared the following charts. You can edit them before we build the dashboard.")
@@ -520,6 +527,7 @@ if "dashboard_plan" in st.session_state:
                 st.session_state["pending_dashboard_plan"] = updated_plan
                 st.session_state["is_building_dashboard"] = True
                 st.rerun()
+
 
 
 for message in st.session_state.messages:
