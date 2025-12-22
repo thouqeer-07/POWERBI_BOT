@@ -344,10 +344,24 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 
-# --- Dashboard Generation UI (Moved to Top) ---
+
+
+
+
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        if message.get("chart_url"):
+            render_fullscreen_iframe(message["chart_url"], height=400)
+        if message.get("show_data"):
+             df_view = st.session_state.get("current_dataframe")
+             if df_view is not None:
+                 st.dataframe(df_view)
+
 # --- Dashboard Generation UI (State Machine) ---
 if "dashboard_plan" in st.session_state:
-    with st.expander("📊 Review Dashboard Plan [Diag:350]", expanded=True):
+    with st.expander("📊 Review Dashboard Plan", expanded=True):
         
         # ---------------------------------------------------------
         # STATE 1: SUCCESS (Dashboard Created)
@@ -387,7 +401,7 @@ if "dashboard_plan" in st.session_state:
         # STATE 2: BUILDING (Processing - No Form Visible)
         # ---------------------------------------------------------
         elif st.session_state.get("is_building_dashboard"):
-             status = st.status("Building Dashboard... [Diag:390]", expanded=True)
+             status = st.status("Building Dashboard...", expanded=True)
              try:
                  # Clean up temp state instantly to prevent stuck loop
                  if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
@@ -528,19 +542,6 @@ if "dashboard_plan" in st.session_state:
                 st.session_state["is_building_dashboard"] = True
                 st.rerun()
 
-
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-        if message.get("chart_url"):
-            render_fullscreen_iframe(message["chart_url"], height=400)
-        if message.get("show_data"):
-             df_view = st.session_state.get("current_dataframe")
-             if df_view is not None:
-                 st.dataframe(df_view)
-
-# --- Dashboard Generation UI ---
 
 # Chat Logic
 def handle_chat_prompt(prompt, dataset_id, table_name, df=None, messages_history=None, retries=3):
