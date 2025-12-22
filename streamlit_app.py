@@ -347,7 +347,7 @@ if "messages" not in st.session_state:
 # --- Dashboard Generation UI (Moved to Top) ---
 # --- Dashboard Generation UI (State Machine) ---
 if "dashboard_plan" in st.session_state:
-    with st.expander("📊 Review Dashboard Plan", expanded=True):
+    with st.expander("📊 Review Dashboard Plan [Diag:350]", expanded=True):
         
         # ---------------------------------------------------------
         # STATE 1: SUCCESS (Dashboard Created)
@@ -387,7 +387,7 @@ if "dashboard_plan" in st.session_state:
         # STATE 2: BUILDING (Processing - No Form Visible)
         # ---------------------------------------------------------
         elif st.session_state.get("is_building_dashboard"):
-             status = st.status("Building Dashboard...", expanded=True)
+             status = st.status("Building Dashboard... [Diag:390]", expanded=True)
              try:
                  # Clean up temp state instantly to prevent stuck loop
                  if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
