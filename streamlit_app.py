@@ -346,9 +346,8 @@ if "messages" not in st.session_state:
 
 # --- Dashboard Generation UI (Moved to Top) ---
 if "dashboard_plan" in st.session_state:
-    with st.container(border=True):
-        st.write("DEBUG: LOWER BLOCK (Line 348)")
-        with st.expander("📊 Review Dashboard Plan", expanded=True):
+    st.warning("DEBUG: LOWER BLOCK (Line 348)")
+    with st.expander("📊 Review Dashboard Plan", expanded=True):
         if st.session_state.get("waiting_for_dashboard_confirmation"):
             st.header("✅ Dashboard Created!")
             st.write("Please review the dashboard below.")
