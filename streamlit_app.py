@@ -474,7 +474,10 @@ if "dashboard_plan" in st.session_state:
                 
                 if created_chart_ids:
                     status.write("Creating Dashboard container...")
-                    dash_name = f"Dashboard - {table_name} ({len(created_chart_ids)} charts)"
+                    # Append timestamp to ensure unique slug
+                    import time
+                    timestamp = int(time.time())
+                    dash_name = f"Dashboard - {table_name} ({len(created_chart_ids)} charts) [{timestamp}]"
                     dash = sup.create_dashboard(dash_name)
                     dash_id = dash.get("id")
                     st.session_state["current_dashboard_id"] = dash_id
