@@ -348,7 +348,6 @@ if "messages" not in st.session_state:
 if "dashboard_plan" in st.session_state:
     st.warning("DEBUG: LOWER BLOCK (Line 348)")
     with st.expander("📊 Review Dashboard Plan", expanded=True):
-        # STATE 1: SUCCESS (Dashboard Created)
         if st.session_state.get("waiting_for_dashboard_confirmation"):
             st.header("✅ Dashboard Created!")
             st.write("Please review the dashboard below.")
@@ -357,14 +356,15 @@ if "dashboard_plan" in st.session_state:
             
             c1, c2 = st.columns(2)
             if c1.button("Confirm & Keep"):
+                 # Add to chat history
                  msg = f"I've created a new dashboard! You can view it here: [Dashboard Link]({dash_url})"
                  st.session_state.messages.append({"role": "assistant", "content": msg, "chart_url": dash_url})
                  
                  del st.session_state["dashboard_plan"]
                  del st.session_state["waiting_for_dashboard_confirmation"]
-                 if "pending_dashboard_plan" in st.session_state: del st.session_state["pending_dashboard_plan"]
                  st.success("Dashboard finalized!")
-                 st.rerun()
+                 # st.rerun() # Optional, depends on UI layout. 
+                 # Keeping it for confirmation if needed, but testing without it for speed.
             
             if c2.button("Reject & Delete"):
                  dash_id = st.session_state.get("created_dashboard_id")
@@ -377,149 +377,137 @@ if "dashboard_plan" in st.session_state:
                  del st.session_state["waiting_for_dashboard_confirmation"]
                  st.rerun()
 
-        # STATE 2: BUILDING (Processing)
-        elif st.session_state.get("is_building_dashboard"):
-             status = st.status("Building Dashboard...", expanded=True)
-             try:
-                 # Clean up temp state
-                 if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
-                 
-                 updated_plan = st.session_state.get("pending_dashboard_plan", [])
-                 dataset_id = st.session_state.get("current_dataset_id")
-                 db_id = st.session_state.get("superset_db_id")
-                 table_name = st.session_state.get("current_table")
-                 
-                 if not dataset_id:
-                     try:
-                         ds = sup.create_dataset(database_id=db_id, schema="public", table_name=table_name)
-                         dataset_id = ds.get("id")
-                     except Exception as e:
-                         status.error(f"Could not ensure dataset: {e}")
-                         st.stop()
-                 
-                 created_chart_ids = []
-                 for chart in updated_plan:
-                     status.write(f"Creating chart: {chart['title']}...")
-                     viz_map = {
-                         "dist_bar": "echarts_timeseries_bar", # Superset 3.x+ preferred
-                         "bar": "echarts_timeseries_bar",
-                         "line": "echarts_timeseries_line",
-                         "pie": "pie",
-                         "big_number_total": "big_number_total"
-                     }
-                     actual_viz = viz_map.get(chart["viz_type"], chart["viz_type"])
-                     params = {
-                         "adhoc_filters": [],
-                         "row_limit": 100,
-                         "datasource": f"{dataset_id}__table",
-                         "show_legend": True,
-                         "legendOrientation": "top",
-                         "legendType": "scroll"
-                     }
-                     
-                     # Metric Spec Construction
-                     if chart["metric"].lower() == "count":
-                         metric_spec = "count"
-                     else:
-                         metric_spec = {
-                             "expressionType": "SIMPLE",
-                             "column": {"column_name": chart["metric"]},
-                             "aggregate": chart["agg_func"],
-                             "label": f"{chart['agg_func']} of {chart['metric']}"
-                         }
-                     
-                     # Viz Specific Params
-                     if actual_viz == "big_number_total":
-                         params["metric"] = metric_spec
-                         params["subheader"] = ""
-                     elif actual_viz == "pie":
-                         params["metric"] = metric_spec
-                         if chart.get("group_by"):
-                             params["groupby"] = [chart["group_by"]]
-                     elif actual_viz in ["echarts_timeseries_bar", "echarts_timeseries_line"]:
-                         params["metrics"] = [metric_spec]
-                         if chart.get("group_by"):
-                             params["groupby"] = []
-                             params["x_axis"] = chart["group_by"]
-                     else:
-                         params["metrics"] = [metric_spec]
-                         if chart.get("group_by"):
-                             params["groupby"] = [chart["group_by"]]
-                     
-                     try:
-                         c_resp = sup.create_chart(dataset_id, chart["title"], actual_viz, params)
-                         created_chart_ids.append(c_resp.get("id"))
-                     except Exception as e:
-                         status.warning(f"Failed to create chart '{chart['title']}': {e}")
-                 
-                 if created_chart_ids:
-                     status.write("Creating Dashboard container...")
-                     dash_name = f"Dashboard - {table_name} ({len(created_chart_ids)} charts)"
-                     dash = sup.create_dashboard(dash_name)
-                     dash_id = dash.get("id")
-                     st.session_state["current_dashboard_id"] = dash_id
-                     status.write("Linking charts to dashboard...")
-                     sup.add_charts_to_dashboard(dash_id, created_chart_ids)
-                     dash_url = sup.dashboard_url(dash_id)
-                     status.update(label="Dashboard Created!", state="complete", expanded=False)
-                     
-                     # Store state and request confirmation
-                     st.session_state["created_dashboard_id"] = dash_id
-                     st.session_state["created_dashboard_url"] = dash_url
-                     st.session_state["waiting_for_dashboard_confirmation"] = True
-                     st.rerun() 
-                 else:
-                     status.error("No charts were successfully created.")
-             except Exception as e:
-                 status.error(f"Process failed: {e}")
-
-        # STATE 3: INPUT form
         else:
-            st.header("📊 Dashboard Plan Review")
-            st.write("I've analyzed your data and prepared the following charts. You can edit them before we build the dashboard.")
-            plan = st.session_state["dashboard_plan"]
-            updated_plan = []
+            # Create a placeholder for the review UI so we can clear it on submit
+            review_placeholder = st.empty()
             
-            with st.form("dashboard_review_form"):
-                for i, chart in enumerate(plan):
-                    st.subheader(f"Chart {i+1}")
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        title = st.text_input(f"Title", value=chart.get("title"), key=f"title_{i}")
-                    with c2:
-                        viz_options = ["dist_bar", "pie", "line", "big_number_total"]
-                        default_viz = chart.get("viz_type", "dist_bar")
-                        if default_viz not in viz_options:
-                            default_viz = "dist_bar"
-                        viz = st.selectbox(f"Type", viz_options, index=viz_options.index(default_viz), key=f"viz_{i}")
-                    with c3:
-                        metric = st.text_input(f"Metric Column", value=chart.get("metric"), key=f"metric_{i}")
-                    c4, c5 = st.columns(2)
-                    with c4:
-                        grp = st.text_input(f"Group By", value=chart.get("group_by") or "", key=f"grp_{i}")
-                    with c5:
-                        agg_options = ["SUM", "COUNT", "AVG", "MIN", "MAX"]
-                        default_agg = chart.get("agg_func", "SUM")
-                        if default_agg not in agg_options:
-                            default_agg = "SUM"
-                        agg = st.selectbox(f"Aggregation", agg_options, index=agg_options.index(default_agg), key=f"agg_{i}")
-                    include = st.checkbox(f"Include '{title}'", value=True, key=f"inc_{i}")
-                    if include:
-                        updated_plan.append({
-                            "title": title,
-                            "viz_type": viz,
-                            "metric": metric,
-                            "group_by": grp if grp else None,
-                            "agg_func": agg
-                        })
-                    st.divider()
-                submitted = st.form_submit_button("🚀 Create Dashboard")
+            with review_placeholder.container():
+                st.header("📊 Dashboard Plan Review")
+                st.write("I've analyzed your data and prepared the following charts. You can edit them before we build the dashboard.")
+                plan = st.session_state["dashboard_plan"]
+                updated_plan = []
+                with st.form("dashboard_review_form"):
+                    for i, chart in enumerate(plan):
+                        st.subheader(f"Chart {i+1}")
+                        c1, c2, c3 = st.columns(3)
+                        with c1:
+                            title = st.text_input(f"Title", value=chart.get("title"), key=f"title_{i}")
+                        with c2:
+                            viz_options = ["dist_bar", "pie", "line", "big_number_total"]
+                            default_viz = chart.get("viz_type", "dist_bar")
+                            if default_viz not in viz_options:
+                                default_viz = "dist_bar"
+                            viz = st.selectbox(f"Type", viz_options, index=viz_options.index(default_viz), key=f"viz_{i}")
+                        with c3:
+                            metric = st.text_input(f"Metric Column", value=chart.get("metric"), key=f"metric_{i}")
+                        c4, c5 = st.columns(2)
+                        with c4:
+                            grp = st.text_input(f"Group By", value=chart.get("group_by") or "", key=f"grp_{i}")
+                        with c5:
+                            agg_options = ["SUM", "COUNT", "AVG", "MIN", "MAX"]
+                            default_agg = chart.get("agg_func", "SUM")
+                            if default_agg not in agg_options:
+                                default_agg = "SUM"
+                            agg = st.selectbox(f"Aggregation", agg_options, index=agg_options.index(default_agg), key=f"agg_{i}")
+                        include = st.checkbox(f"Include '{title}'", value=True, key=f"inc_{i}")
+                        if include:
+                            updated_plan.append({
+                                "title": title,
+                                "viz_type": viz,
+                                "metric": metric,
+                                "group_by": grp if grp else None,
+                                "agg_func": agg
+                            })
+                        st.divider()
+                    submitted = st.form_submit_button("🚀 Create Dashboard")
 
             if submitted:
-                # Transition to Building State
-                st.session_state["pending_dashboard_plan"] = updated_plan
-                st.session_state["is_building_dashboard"] = True
-                st.rerun()
+                # Clear the review UI immediately!
+                review_placeholder.empty()
+                
+                status = st.status("Building Dashboard...", expanded=True)
+                try:
+                    dataset_id = st.session_state.get("current_dataset_id")
+                    db_id = st.session_state.get("superset_db_id")
+                    table_name = st.session_state.get("current_table")
+                    if not dataset_id:
+                        try:
+                            ds = sup.create_dataset(database_id=db_id, schema="public", table_name=table_name)
+                            dataset_id = ds.get("id")
+                        except Exception as e:
+                            status.error(f"Could not ensure dataset: {e}")
+                            st.stop()
+                    created_chart_ids = []
+                    for chart in updated_plan:
+                        status.write(f"Creating chart: {chart['title']}...")
+                        viz_map = {
+                            "dist_bar": "echarts_timeseries_bar",
+                            "bar": "echarts_timeseries_bar",
+                            "line": "echarts_timeseries_line",
+                            "pie": "pie",
+                            "big_number_total": "big_number_total"
+                        }
+                        actual_viz = viz_map.get(chart["viz_type"], chart["viz_type"])
+                        params = {
+                            "adhoc_filters": [],
+                            "row_limit": 100,
+                            "datasource": f"{dataset_id}__table",
+                            "show_legend": True,
+                            "legendOrientation": "top",
+                            "legendType": "scroll"
+                        }
+                        if chart["metric"].lower() == "count":
+                            metric_spec = "count"
+                        else:
+                            metric_spec = {
+                                "expressionType": "SIMPLE",
+                                "column": {"column_name": chart["metric"]},
+                                "aggregate": chart["agg_func"],
+                                "label": f"{chart['agg_func']} of {chart['metric']}"
+                            }
+                        if actual_viz == "big_number_total":
+                            params["metric"] = metric_spec
+                            params["subheader"] = ""
+                        elif actual_viz == "pie":
+                            params["metric"] = metric_spec
+                            if chart.get("group_by"):
+                                params["groupby"] = [chart["group_by"]]
+                        elif actual_viz in ["echarts_timeseries_bar", "echarts_timeseries_line"]:
+                            params["metrics"] = [metric_spec]
+                            if chart.get("group_by"):
+                                params["groupby"] = []
+                                params["x_axis"] = chart["group_by"]
+                        else:
+                            params["metrics"] = [metric_spec]
+                            if chart.get("group_by"):
+                                params["groupby"] = [chart["group_by"]]
+                        try:
+                            c_resp = sup.create_chart(dataset_id, chart["title"], actual_viz, params)
+                            created_chart_ids.append(c_resp.get("id"))
+                        except Exception as e:
+                            status.warning(f"Failed to create chart '{chart['title']}': {e}")
+                    if created_chart_ids:
+                        status.write("Creating Dashboard container...")
+                        dash_name = f"Dashboard - {table_name} ({len(created_chart_ids)} charts)"
+                        dash = sup.create_dashboard(dash_name)
+                        dash_id = dash.get("id")
+                        st.session_state["current_dashboard_id"] = dash_id
+                        status.write("Linking charts to dashboard...")
+                        sup.add_charts_to_dashboard(dash_id, created_chart_ids)
+                        dash_url = sup.dashboard_url(dash_id)
+                        status.update(label="Dashboard Created!", state="complete", expanded=False)
+                        
+                        # Store state and request confirmation
+                        st.session_state["created_dashboard_id"] = dash_id
+                        st.session_state["created_dashboard_url"] = dash_url
+                        st.session_state["waiting_for_dashboard_confirmation"] = True
+                        # Optional rerun to show the review UI immediately
+                        st.rerun() 
+
+                    else:
+                        status.error("No charts were successfully created.")
+                except Exception as e:
+                    status.error(f"Process failed: {e}")
 
 
 for message in st.session_state.messages:
