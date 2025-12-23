@@ -374,41 +374,43 @@ if "dashboard_plan" in st.session_state:
         
         c1, c2 = st.columns(2)
         if c1.button("Confirm & Keep"):
-                msg = f"I've created a new dashboard! You can view it here: [Dashboard Link]({dash_url})"
-                st.session_state.messages.append({"role": "assistant", "content": msg, "chart_url": dash_url})
+            msg = f"I've created a new dashboard! You can view it here: [Dashboard Link]({dash_url})"
+            st.session_state.messages.append({"role": "assistant", "content": msg, "chart_url": dash_url})
+            
+            # Cleanup State
+            del st.session_state["dashboard_plan"]
+            del st.session_state["waiting_for_dashboard_confirmation"]
+            if "pending_dashboard_plan" in st.session_state: del st.session_state["pending_dashboard_plan"]
+            if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
+            
+            st.success("Dashboard finalized!")
+            st.rerun()
+    
+        elif c2.button("Reject & Delete"):
+            dash_id = st.session_state.get("created_dashboard_id")
+            try:
+                # Delete Dashboard
+                sup.delete_dashboard(dash_id)
+                st.warning("Dashboard deleted.")
                 
-                # Cleanup State
-                del st.session_state["dashboard_plan"]
-                del st.session_state["waiting_for_dashboard_confirmation"]
-                if "pending_dashboard_plan" in st.session_state: del st.session_state["pending_dashboard_plan"]
-                if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
-                
-                st.success("Dashboard finalized!")
-                st.rerun()
-        
-                dash_id = st.session_state.get("created_dashboard_id")
-                try:
-                    # Delete Dashboard
-                    sup.delete_dashboard(dash_id)
-                    st.warning("Dashboard deleted.")
+                # Delete Associated Charts
+                chart_ids = st.session_state.get("created_chart_ids", [])
+                if chart_ids:
+                    for c_id in chart_ids:
+                         try:
+                             sup.delete_chart(c_id)
+                         except Exception as e:
+                             print(f"Failed to delete chart {c_id}: {e}")
+                    st.warning(f"Associated {len(chart_ids)} charts deleted.")
+                    del st.session_state["created_chart_ids"]
                     
-                    # Delete Associated Charts
-                    chart_ids = st.session_state.get("created_chart_ids", [])
-                    if chart_ids:
-                        for c_id in chart_ids:
-                             try:
-                                 sup.delete_chart(c_id)
-                             except Exception as e:
-                                 print(f"Failed to delete chart {c_id}: {e}")
-                        st.warning(f"Associated {len(chart_ids)} charts deleted.")
-                        del st.session_state["created_chart_ids"]
-                        
-                    st.write("You can modify the plan below.")
-                except Exception as e:
-                    st.error(f"Failed to delete dashboard: {e}")
-                
+                st.write("You can modify the plan below.")
+            except Exception as e:
+                st.error(f"Failed to delete dashboard: {e}")
+            
+            if "waiting_for_dashboard_confirmation" in st.session_state:
                 del st.session_state["waiting_for_dashboard_confirmation"]
-                st.rerun()
+            st.rerun()
 
     # ---------------------------------------------------------
     # STATE 2: BUILDING (Processing - No Form Visible)
