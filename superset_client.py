@@ -520,6 +520,34 @@ class SupersetClient:
             if "relation \"slices\" does not exist" in str(e) or "psycopg2" in str(e):
                  print("TIP: If you are on Streamlit Cloud, you MUST set SUPERSET_METADATA_DB_URI to your Superset database URI for this fallback to work.")
             return self._create_chart_direct(dataset_id, chart_name, viz_type, params)
+
+    def delete_chart(self, chart_id):
+        """Delete a chart by ID."""
+        try:
+            resp = self._request("DELETE", f"api/v1/chart/{chart_id}", timeout=30)
+            if resp.ok:
+                print(f"✅ Chart {chart_id} deleted via API.")
+                return True
+        except Exception as e:
+            print(f"API chart deletion failed: {e}. Trying database-direct method...")
+        
+        # Fallback
+        return self._delete_chart_direct(chart_id)
+
+    def _delete_chart_direct(self, chart_id):
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+            sql = "DELETE FROM slices WHERE id = %s"
+            cursor.execute(sql, (int(chart_id),))
+            conn.commit()
+            cursor.close()
+            conn.close()
+            print(f"✅ Chart {chart_id} deleted via database.")
+            return True
+        except Exception as e:
+             print(f"❌ Database chart deletion failed: {e}")
+             return False
     
     def _create_chart_direct(self, dataset_id, chart_name, viz_type, params=None):
         """Create chart by direct database insertion (bypasses buggy API)"""

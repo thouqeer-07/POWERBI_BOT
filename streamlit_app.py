@@ -386,11 +386,24 @@ if "dashboard_plan" in st.session_state:
                 st.success("Dashboard finalized!")
                 st.rerun()
         
-        if c2.button("Reject & Delete"):
                 dash_id = st.session_state.get("created_dashboard_id")
                 try:
+                    # Delete Dashboard
                     sup.delete_dashboard(dash_id)
-                    st.warning("Dashboard deleted. You can modify the plan below.")
+                    st.warning("Dashboard deleted.")
+                    
+                    # Delete Associated Charts
+                    chart_ids = st.session_state.get("created_chart_ids", [])
+                    if chart_ids:
+                        for c_id in chart_ids:
+                             try:
+                                 sup.delete_chart(c_id)
+                             except Exception as e:
+                                 print(f"Failed to delete chart {c_id}: {e}")
+                        st.warning(f"Associated {len(chart_ids)} charts deleted.")
+                        del st.session_state["created_chart_ids"]
+                        
+                    st.write("You can modify the plan below.")
                 except Exception as e:
                     st.error(f"Failed to delete dashboard: {e}")
                 
@@ -488,6 +501,7 @@ if "dashboard_plan" in st.session_state:
                     
                     st.session_state["created_dashboard_id"] = dash_id
                     st.session_state["created_dashboard_url"] = dash_url
+                    st.session_state["created_chart_ids"] = created_chart_ids # Store for potential rollback
                     st.session_state["waiting_for_dashboard_confirmation"] = True
                     
                     # Cleanup flag primarily on SUCCESS
