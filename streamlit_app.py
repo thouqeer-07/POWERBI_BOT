@@ -294,8 +294,8 @@ with st.sidebar:
             choice = st.selectbox("Choose Superset database", options)
             db_id = int(choice.split(" - ")[0])
         else:
-            default_db = getattr(sup, "database_id", None) or 1
-            db_id = st.number_input("Superset database id", value=int(default_db), min_value=1)
+            # Auto-assign default if listing fails
+            db_id = getattr(sup, "database_id", None) or 1
     if db_id:
         st.session_state["superset_db_id"] = db_id
     uploaded_file = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
