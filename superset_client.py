@@ -1,7 +1,6 @@
 import os
 import json
 import requests
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 
 # Try to import streamlit for secrets management
@@ -525,7 +524,7 @@ class SupersetClient:
     def delete_chart(self, chart_id):
         """Delete a chart by ID."""
         try:
-            resp = self._request("DELETE", f"api/v1/chart/{chart_id}", timeout=5)
+            resp = self._request("DELETE", f"api/v1/chart/{chart_id}", timeout=30)
             if resp.ok:
                 print(f"✅ Chart {chart_id} deleted via API.")
                 return True
@@ -549,23 +548,6 @@ class SupersetClient:
         except Exception as e:
              print(f"❌ Database chart deletion failed: {e}")
              return False
-
-    def bulk_delete_charts(self, chart_ids):
-        """Delete multiple charts in parallel for speed."""
-        if not chart_ids:
-            return True
-        print(f"DEBUG: Parallel deletion of {len(chart_ids)} charts...")
-        results = []
-        with ThreadPoolExecutor(max_workers=min(len(chart_ids), 10)) as executor:
-            future_to_id = {executor.submit(self.delete_chart, cid): cid for cid in chart_ids}
-            for future in as_completed(future_to_id):
-                cid = future_to_id[future]
-                try:
-                    results.append(future.result())
-                except Exception as e:
-                    print(f"DEBUG: Error deleting chart {cid} in bulk: {e}")
-                    results.append(False)
-        return all(results)
     
     def _create_chart_direct(self, dataset_id, chart_name, viz_type, params=None):
         """Create chart by direct database insertion (bypasses buggy API)"""
@@ -937,7 +919,7 @@ class SupersetClient:
     def delete_dashboard(self, dashboard_id):
         """Delete a dashboard by ID."""
         try:
-            resp = self._request("DELETE", f"api/v1/dashboard/{dashboard_id}/", timeout=5)
+            resp = self._request("DELETE", f"api/v1/dashboard/{dashboard_id}/", timeout=30)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:

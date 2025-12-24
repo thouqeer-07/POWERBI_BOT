@@ -15,6 +15,7 @@ def stream_data(text, delay=0.02):
         yield word + " "
         time.sleep(delay)
 import json
+import concurrent.futures
 import difflib
 import pandas as pd
 from sqlalchemy import create_engine
@@ -418,39 +419,44 @@ if "dashboard_plan" in st.session_state:
             st.rerun()
     
         elif c2.button("Reject & Delete"):
-            # Use a spinner to indicate progress
-            with st.spinner("Deleting dashboard and associated charts..."):
-                dash_id = st.session_state.get("created_dashboard_id")
+            # 1. Capture necessary IDs and clear state IMMEDIATELY for responsiveness
+            dash_id = st.session_state.get("created_dashboard_id")
+            chart_uuids = st.session_state.get("created_chart_uuids", [])
+            chart_map = st.session_state.get("chart_uuid_map", {})
+            chart_ids = [chart_map.get(uid) for uid in chart_uuids if chart_map.get(uid)]
+            
+            # Reset dashboard related session state immediately
+            for key in ["created_dashboard_id", "created_dashboard_url", "waiting_for_dashboard_confirmation", "created_chart_uuids", "chart_uuid_map"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            
+            # 2. Perform deletions (Speed up with Parallelism)
+            with st.spinner("Deleting dashboard and charts..."):
+                # Delete Dashboard (Sequential, but usually fast)
                 try:
-                    # Delete Dashboard
-                    sup.delete_dashboard(dash_id)
-                    st.success("Dashboard deleted.")
+                    if dash_id:
+                        sup.delete_dashboard(dash_id)
                 except Exception as e:
                     st.error(f"Failed to delete dashboard: {e}")
-                # Delete Associated Charts using stored UUIDs (Parallel)
-                chart_uuids = st.session_state.get("created_chart_uuids", [])
-                chart_map = st.session_state.get("chart_uuid_map", {})
-                if chart_uuids:
-                    # Collect all real IDs
-                    actual_ids = [chart_map.get(uid) for uid in chart_uuids if chart_map.get(uid)]
-                    if actual_ids:
-                        status_msg = f"Deleting {len(actual_ids)} charts in parallel..."
-                        with st.spinner(status_msg):
-                            sup.bulk_delete_charts(actual_ids)
-                        st.success(f"Cleaned up {len(actual_ids)} charts.")
+                
+                # Delete Charts in Parallel
+                if chart_ids:
+                    def delete_chart_task(c_id):
+                        try:
+                            sup.delete_chart(c_id)
+                            return True
+                        except Exception as e:
+                            print(f"Failed to delete chart {c_id}: {e}")
+                            return False
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                        results = list(executor.map(delete_chart_task, chart_ids))
                     
-                    # Clean up chart mappings from session state
-                    if "created_chart_uuids" in st.session_state:
-                        del st.session_state["created_chart_uuids"]
-                    if "chart_uuid_map" in st.session_state:
-                        del st.session_state["chart_uuid_map"]
-                # Reset dashboard related session state
-                for key in ["created_dashboard_id", "created_dashboard_url", "waiting_for_dashboard_confirmation"]:
-                    if key in st.session_state:
-                        del st.session_state[key]
-                # Optionally allow user to modify plan again
-                st.info("You can modify the dashboard plan below.")
-            # Force a rerun to refresh UI
+                    deleted_count = sum(1 for r in results if r)
+                    if deleted_count > 0:
+                        st.toast(f"Deleted {deleted_count} charts.")
+            
+            st.info("Dashboard rejected. You can modify the plan below.")
             st.rerun()
 
     # ---------------------------------------------------------
