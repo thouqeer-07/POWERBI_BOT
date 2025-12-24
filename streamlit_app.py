@@ -1,4 +1,5 @@
 import streamlit as st
+import uuid
 DEBUG = False  # Set to True to enable debug prints
 import streamlit.components.v1 as components
 import re
@@ -426,20 +427,25 @@ if "dashboard_plan" in st.session_state:
                     st.success("Dashboard deleted.")
                 except Exception as e:
                     st.error(f"Failed to delete dashboard: {e}")
-                # Delete Associated Charts
-                chart_ids = st.session_state.get("created_chart_ids", [])
-                if chart_ids:
+                # Delete Associated Charts using stored UUIDs
+                chart_uuids = st.session_state.get("created_chart_uuids", [])
+                chart_map = st.session_state.get("chart_uuid_map", {})
+                if chart_uuids:
                     deleted = 0
-                    for c_id in chart_ids:
-                        try:
-                            sup.delete_chart(c_id)
-                            deleted += 1
-                        except Exception as e:
-                            st.warning(f"Failed to delete chart {c_id}: {e}")
+                    for uid in chart_uuids:
+                        chart_id = chart_map.get(uid)
+                        if chart_id:
+                            try:
+                                sup.delete_chart(chart_id)
+                                deleted += 1
+                            except Exception as e:
+                                st.warning(f"Failed to delete chart {chart_id}: {e}")
                     st.success(f"Deleted {deleted} associated chart(s).")
-                    # Clean up chart IDs from session state
-                    if "created_chart_ids" in st.session_state:
-                        del st.session_state["created_chart_ids"]
+                    # Clean up chart mappings from session state
+                    if "created_chart_uuids" in st.session_state:
+                        del st.session_state["created_chart_uuids"]
+                    if "chart_uuid_map" in st.session_state:
+                        del st.session_state["chart_uuid_map"]
                 # Reset dashboard related session state
                 for key in ["created_dashboard_id", "created_dashboard_url", "waiting_for_dashboard_confirmation"]:
                     if key in st.session_state:
@@ -520,7 +526,18 @@ if "dashboard_plan" in st.session_state:
                     
                     try:
                         c_resp = sup.create_chart(dataset_id, chart["title"], actual_viz, params)
-                        created_chart_ids.append(c_resp.get("id"))
+                        chart_id = c_resp.get("id")
+                        created_chart_ids.append(chart_id)
+                        # Generate a unique identifier for this chart
+                        chart_uuid = str(uuid.uuid4())
+                        # Store mapping in session state
+                        if "chart_uuid_map" not in st.session_state:
+                            st.session_state["chart_uuid_map"] = {}
+                        st.session_state["chart_uuid_map"][chart_uuid] = chart_id
+                        # Keep list of uuids for later deletion
+                        if "created_chart_uuids" not in st.session_state:
+                            st.session_state["created_chart_uuids"] = []
+                        st.session_state["created_chart_uuids"].append(chart_uuid)
                     except Exception as e:
                         status.warning(f"Failed to create chart '{chart['title']}': {e}")
                 
