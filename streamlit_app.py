@@ -149,11 +149,23 @@ def render_fullscreen_iframe(url, height=800):
     components.html(html_code, height=height, scrolling=False)
  
 def scroll_to_top():
-    """Inject Javascript to scroll the page to the top."""
+    """Inject Javascript to scroll the page to the top robustly."""
     components.html(
         """
         <script>
-            window.parent.document.querySelector('section.main').scrollTo(0, 0);
+            // Try to find the main scrollable container in Streamlit
+            function doScroll() {
+                var mainSections = window.parent.document.querySelectorAll('section.main');
+                if (mainSections.length > 0) {
+                    mainSections.forEach(s => s.scrollTo({top: 0, behavior: 'auto'}));
+                } else {
+                    window.parent.scrollTo({top: 0, behavior: 'auto'});
+                }
+            }
+            // Execute immediately and then once more after a short delay
+            doScroll();
+            setTimeout(doScroll, 100);
+            setTimeout(doScroll, 300);
         </script>
         """,
         height=0,
@@ -353,6 +365,10 @@ if 'upload_clicked' in locals() and upload_clicked and uploaded_file:
     except Exception as e:
         st.error(f"Failed to upload file: {e}")
 
+# Handle automatic scroll-to-top on state transitions
+if st.session_state.get("is_building_dashboard") or st.session_state.get("waiting_for_dashboard_confirmation"):
+    scroll_to_top()
+
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -381,7 +397,6 @@ if "dashboard_plan" in st.session_state:
     # STATE 1: SUCCESS (Dashboard Created)
     # ---------------------------------------------------------
     if st.session_state.get("waiting_for_dashboard_confirmation"):
-        scroll_to_top()
         st.header("✅ Dashboard Created!")
         st.write("Please review the dashboard below.")
         dash_url = st.session_state.get("created_dashboard_url")
@@ -431,7 +446,6 @@ if "dashboard_plan" in st.session_state:
     # STATE 2: BUILDING (Processing - No Form Visible)
     # ---------------------------------------------------------
     elif st.session_state.get("is_building_dashboard"):
-            scroll_to_top()
             status = st.status("Building Dashboard...", expanded=True)
             try:
                 # Do NOT clean up temp state instantly. Wait for success or error.
