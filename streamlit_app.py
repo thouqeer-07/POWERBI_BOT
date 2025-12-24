@@ -427,20 +427,18 @@ if "dashboard_plan" in st.session_state:
                     st.success("Dashboard deleted.")
                 except Exception as e:
                     st.error(f"Failed to delete dashboard: {e}")
-                # Delete Associated Charts using stored UUIDs
+                # Delete Associated Charts using stored UUIDs (Parallel)
                 chart_uuids = st.session_state.get("created_chart_uuids", [])
                 chart_map = st.session_state.get("chart_uuid_map", {})
                 if chart_uuids:
-                    deleted = 0
-                    for uid in chart_uuids:
-                        chart_id = chart_map.get(uid)
-                        if chart_id:
-                            try:
-                                sup.delete_chart(chart_id)
-                                deleted += 1
-                            except Exception as e:
-                                st.warning(f"Failed to delete chart {chart_id}: {e}")
-                    st.success(f"Deleted {deleted} associated chart(s).")
+                    # Collect all real IDs
+                    actual_ids = [chart_map.get(uid) for uid in chart_uuids if chart_map.get(uid)]
+                    if actual_ids:
+                        status_msg = f"Deleting {len(actual_ids)} charts in parallel..."
+                        with st.spinner(status_msg):
+                            sup.bulk_delete_charts(actual_ids)
+                        st.success(f"Cleaned up {len(actual_ids)} charts.")
+                    
                     # Clean up chart mappings from session state
                     if "created_chart_uuids" in st.session_state:
                         del st.session_state["created_chart_uuids"]
