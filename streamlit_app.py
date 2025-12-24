@@ -273,6 +273,40 @@ Example JSON output structure:
             time.sleep(2 ** attempt)
     return []
 
+# --- Cookie Access Guard ---
+if "cookies_acknowledged" not in st.session_state:
+    st.session_state["cookies_acknowledged"] = False
+
+if not st.session_state["cookies_acknowledged"]:
+    st.title("🛡️ Welcome to BI Assistant")
+    st.subheader("Action Required: Enable Third-Party Cookies")
+    st.write("""
+        To ensures that your dashboards load correctly via **Ngrok & Superset**, 
+        please follow these steps:
+    """)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+            **How to enable in Chrome:**
+            1. Go to **Settings** > **Privacy and security**.
+            2. Click on **Third-party cookies**.
+            3. Select **Allow third-party cookies**.
+        """)
+    with col2:
+         st.markdown("""
+            **Why is this needed?**
+            Superset dashboards are embedded via iframes. Browsers block these by default to prevent cross-site tracking, which interferes with secure BI tools.
+        """)
+
+    st.warning("⚠️ After enabling cookies, click the button below to start your session.")
+    
+    if st.button("🚀 I have enabled Third-Party Cookies", use_container_width=True):
+        st.session_state["cookies_acknowledged"] = True
+        st.rerun()
+    
+    st.stop() # Prevent the rest of the app from loading
+
 st.title("Superset AI Assistant")
 
 # Sidebar for File Upload
