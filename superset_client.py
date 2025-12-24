@@ -998,19 +998,30 @@ class SupersetClient:
         if allowed_domains is None:
             allowed_domains = ["*"]
             
+        embedded_uuid = None
         # 1. Try to get existing config
         try:
             resp = self._request("GET", f"api/v1/dashboard/{dashboard_id}/embedded", timeout=10)
             if resp.ok:
-                return resp.json().get("result", {}).get("uuid")
+                embedded_uuid = resp.json().get("result", {}).get("uuid")
         except Exception:
             pass
             
-        # 2. If not found, create it
+        # 2. Always update/create it to ensure allowed_domains is correctly set (e.g. ['*'])
+        # This is safer than just relying on whatever was there before.
         payload = {"allowed_domains": allowed_domains}
-        resp = self._request("POST", f"api/v1/dashboard/{dashboard_id}/embedded", json=payload, timeout=10)
-        if not resp.ok:
-            print(f"DEBUG: Failed to create embedded config for dashboard {dashboard_id}: {resp.text}")
-            resp.raise_for_status()
+        if embedded_uuid:
+            # Update existing
+            print(f"DEBUG: Updating existing embedded config for dashboard {dashboard_id}...")
+            resp = self._request("PUT", f"api/v1/dashboard/{dashboard_id}/embedded", json=payload, timeout=10)
+        else:
+            # Create new
+            print(f"DEBUG: Creating new embedded config for dashboard {dashboard_id}...")
+            resp = self._request("POST", f"api/v1/dashboard/{dashboard_id}/embedded", json=payload, timeout=10)
             
-        return resp.json().get("result", {}).get("uuid")
+        if not resp.ok:
+            print(f"DEBUG: Failed to update/create embedded config for dashboard {dashboard_id}: {resp.text}")
+            if not embedded_uuid: # If we don't even have a UUID to return, fail
+                resp.raise_for_status()
+            
+        return embedded_uuid or resp.json().get("result", {}).get("uuid")
