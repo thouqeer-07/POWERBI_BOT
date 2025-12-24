@@ -417,29 +417,36 @@ if "dashboard_plan" in st.session_state:
             st.rerun()
     
         elif c2.button("Reject & Delete"):
-            dash_id = st.session_state.get("created_dashboard_id")
-            try:
-                # Delete Dashboard
-                sup.delete_dashboard(dash_id)
-                st.warning("Dashboard deleted.")
-                
+            # Use a spinner to indicate progress
+            with st.spinner("Deleting dashboard and associated charts..."):
+                dash_id = st.session_state.get("created_dashboard_id")
+                try:
+                    # Delete Dashboard
+                    sup.delete_dashboard(dash_id)
+                    st.success("Dashboard deleted.")
+                except Exception as e:
+                    st.error(f"Failed to delete dashboard: {e}")
                 # Delete Associated Charts
                 chart_ids = st.session_state.get("created_chart_ids", [])
                 if chart_ids:
+                    deleted = 0
                     for c_id in chart_ids:
-                         try:
-                             sup.delete_chart(c_id)
-                         except Exception as e:
-                             print(f"Failed to delete chart {c_id}: {e}")
-                    st.warning(f"Associated {len(chart_ids)} charts deleted.")
-                    del st.session_state["created_chart_ids"]
-                    
-                st.write("You can modify the plan below.")
-            except Exception as e:
-                st.error(f"Failed to delete dashboard: {e}")
-            
-            if "waiting_for_dashboard_confirmation" in st.session_state:
-                del st.session_state["waiting_for_dashboard_confirmation"]
+                        try:
+                            sup.delete_chart(c_id)
+                            deleted += 1
+                        except Exception as e:
+                            st.warning(f"Failed to delete chart {c_id}: {e}")
+                    st.success(f"Deleted {deleted} associated chart(s).")
+                    # Clean up chart IDs from session state
+                    if "created_chart_ids" in st.session_state:
+                        del st.session_state["created_chart_ids"]
+                # Reset dashboard related session state
+                for key in ["created_dashboard_id", "created_dashboard_url", "waiting_for_dashboard_confirmation"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                # Optionally allow user to modify plan again
+                st.info("You can modify the dashboard plan below.")
+            # Force a rerun to refresh UI
             st.rerun()
 
     # ---------------------------------------------------------
