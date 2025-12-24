@@ -147,6 +147,17 @@ def render_fullscreen_iframe(url, height=800):
     </html>
     """
     components.html(html_code, height=height, scrolling=False)
+ 
+def scroll_to_top():
+    """Inject Javascript to scroll the page to the top."""
+    components.html(
+        """
+        <script>
+            window.parent.document.querySelector('section.main').scrollTo(0, 0);
+        </script>
+        """,
+        height=0,
+    )
 
 import time
 
@@ -370,6 +381,7 @@ if "dashboard_plan" in st.session_state:
     # STATE 1: SUCCESS (Dashboard Created)
     # ---------------------------------------------------------
     if st.session_state.get("waiting_for_dashboard_confirmation"):
+        scroll_to_top()
         st.header("✅ Dashboard Created!")
         st.write("Please review the dashboard below.")
         dash_url = st.session_state.get("created_dashboard_url")
@@ -419,6 +431,7 @@ if "dashboard_plan" in st.session_state:
     # STATE 2: BUILDING (Processing - No Form Visible)
     # ---------------------------------------------------------
     elif st.session_state.get("is_building_dashboard"):
+            scroll_to_top()
             status = st.status("Building Dashboard...", expanded=True)
             try:
                 # Do NOT clean up temp state instantly. Wait for success or error.

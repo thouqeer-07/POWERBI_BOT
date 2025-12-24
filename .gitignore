@@ -1,4 +1,6 @@
 .env
-/superset
+.env.example
+
 /.venv
-grant_public_access.py
+grant_public_access.py  
+/superset
