@@ -49,13 +49,17 @@ else:
 
 # Initialize Superset Client
 @st.cache_resource
-def get_superset_client():
+def get_superset_client(version="1.0.1"): # Bump version to force cache clear
     # Fetch public URL from secrets if available
     public_url = st.secrets.get("SUPERSET_PUBLIC_URL") or os.getenv("SUPERSET_PUBLIC_URL")
     return SupersetClient(superset_url=public_url)
 
 try:
     sup = get_superset_client()
+    # SECONDARY CHECK: If for some reason cache persists old class definition
+    if not hasattr(sup, "get_or_create_embedded_config"):
+        st.cache_resource.clear()
+        sup = get_superset_client()
 except Exception as e:
     st.error(f"Failed to initialize Superset Client: {e}")
     st.stop()
@@ -163,46 +167,61 @@ def render_superset_embedded(dashboard_id, height=800):
         # We need the public URL if it exists
         superset_url = st.secrets.get("SUPERSET_PUBLIC_URL") or os.getenv("SUPERSET_PUBLIC_URL", sup.superset_url)
         
-        # 4. Injected SDK HTML
-        # We use a reliable CDN for the Superset Embedded SDK
+        # 4. Injected SDK HTML with Invisible Ngrok Bypass
         html_code = f"""
         <!DOCTYPE html>
         <html>
         <head>
             <script src="https://unpkg.com/@superset-ui/embedded-sdk"></script>
             <style>
-                body, html, #dashboard {{
-                    margin: 0;
-                    padding: 0;
-                    width: 100%;
-                    height: {height}px;
-                    overflow: hidden;
+                body, html, #dashboard-root {{
+                    margin: 0; padding: 0; width: 100%; height: {height}px; overflow: hidden;
+                    background-color: transparent;
                 }}
-                iframe {{
-                    width: 100%;
-                    height: 100%;
-                    border: none;
+                iframe {{ width: 100%; height: 100%; border: none; }}
+                #loader {{
+                    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                    display: flex; align-items: center; justify-content: center;
+                    font-family: sans-serif; color: #666; background: #fff; z-index: 10;
+                    transition: opacity 0.5s;
                 }}
             </style>
         </head>
         <body>
-            <div id="dashboard"></div>
+            <div id="loader">🚀 Preparing Dashboard...</div>
+            <div id="dashboard-root"></div>
             <script>
-                supersetEmbeddedSdk.embedDashboard({{
-                    id: "{embedded_id}",
-                    supersetDomain: "{superset_url.rstrip("/")}",
-                    mountPoint: document.getElementById("dashboard"),
-                    fetchGuestToken: () => "{guest_token}",
-                    dashboardConfig: {{
-                        hideTitle: true,
-                        hideTab: true,
-                        hideChartControls: true,
-                        filters: {{
-                            visible: false,
-                            expanded: false,
-                        }}
-                    }},
-                }});
+                async function init() {{
+                    const domain = "{superset_url.rstrip("/")}";
+                    try {{
+                        // Bypassing ngrok "Visit Site" warning page automatically
+                        // This fetch sets the 'ngrok-skip-browser-warning' cookie for the domain
+                        await fetch(domain + "/", {{
+                            mode: 'no-cors',
+                            headers: {{ 'ngrok-skip-browser-warning': 'true' }}
+                        }});
+                    }} catch (e) {{ console.error("Ngrok bypass failed", e); }}
+
+                    supersetEmbeddedSdk.embedDashboard({{
+                        id: "{embedded_id}",
+                        supersetDomain: domain,
+                        mountPoint: document.getElementById("dashboard-root"),
+                        fetchGuestToken: () => "{guest_token}",
+                        dashboardConfig: {{
+                            hideTitle: true,
+                            hideTab: true,
+                            hideChartControls: true,
+                            filters: {{ visible: false, expanded: false }}
+                        }},
+                    }});
+                    
+                    // Hide loader once SDK starts loading
+                    setTimeout(() => {{
+                        document.getElementById("loader").style.opacity = "0";
+                        setTimeout(() => document.getElementById("loader").style.display = "none", 500);
+                    }}, 1500);
+                }}
+                init();
             </script>
         </body>
         </html>
@@ -448,8 +467,10 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        if message.get("chart_url"):
-            render_fullscreen_iframe(message["chart_url"], height=400)
+        if message.get("dashboard_id"):
+            render_superset_embedded(message["dashboard_id"], height=600)
+        elif message.get("chart_url"):
+            render_fullscreen_iframe(message["chart_url"], height=600)
         if message.get("show_data"):
              df_view = st.session_state.get("current_dataframe")
              if df_view is not None:
@@ -471,7 +492,12 @@ if "dashboard_plan" in st.session_state:
         c1, c2 = st.columns(2)
         if c1.button("Confirm & Keep"):
             msg = f"I've created a new dashboard! You can view it here: [Dashboard Link]({dash_url})"
-            st.session_state.messages.append({"role": "assistant", "content": msg, "chart_url": dash_url})
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": msg, 
+                "chart_url": dash_url,
+                "dashboard_id": dash_id
+            })
             
             # Cleanup State
             del st.session_state["dashboard_plan"]
