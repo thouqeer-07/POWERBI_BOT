@@ -176,51 +176,54 @@ def render_superset_embedded(dashboard_id, height=800):
             st.error("❌ Failed to generate Guest Token")
             return
 
-        # 4. Injected SDK HTML with Invisible Ngrok Bypass
+        # 4. Injected SDK HTML with JS Error Trapping
         html_code = f"""
         <!DOCTYPE html>
         <html>
         <head>
             <script src="https://unpkg.com/@superset-ui/embedded-sdk"></script>
             <style>
-                body, html, #dashboard-root {{
-                    margin: 0; padding: 0; width: 100%; height: {height}px; overflow: hidden;
-                    background-color: transparent;
-                }}
-                iframe {{ width: 100%; height: 100%; border: none; }}
-                #loader {{
-                    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-                    display: flex; align-items: center; justify-content: center;
-                    font-family: sans-serif; color: #666; background: #fff; z-index: 10;
-                    transition: opacity 0.5s;
+                body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }}
+                #dashboard-root {{ width: 100%; height: 100%; }}
+                #error-log {{ 
+                    color: red; font-family: monospace; padding: 20px; background: #fff0f0; 
+                    border: 1px solid red; display: none; position: absolute; top: 0; left: 0; z-index: 1000; width: 100%;
                 }}
             </style>
         </head>
         <body>
-            <div id="loader">🚀 Preparing Dashboard...</div>
+            <div id="error-log"></div>
             <div id="dashboard-root"></div>
             <script>
+                // Visual Error Logger
+                window.onerror = function(msg, url, line) {{
+                    var log = document.getElementById('error-log');
+                    log.style.display = 'block';
+                    log.innerHTML += "JS Error: " + msg + "<br>Line: " + line + "<br>";
+                    return false;
+                }};
+
                 async function init() {{
-                    const domain = "{superset_url.rstrip("/")}";
-                    
-                    supersetEmbeddedSdk.embedDashboard({{
-                        id: "{embedded_id}",
-                        supersetDomain: domain,
-                        mountPoint: document.getElementById("dashboard-root"),
-                        fetchGuestToken: () => "{guest_token}",
-                        dashboardConfig: {{
-                            hideTitle: true,
-                            hideTab: true,
-                            hideChartControls: true,
-                            filters: {{ visible: false, expanded: false }}
-                        }},
-                    }});
-                    
-                    // Hide loader once SDK starts loading
-                    setTimeout(() => {{
-                        document.getElementById("loader").style.opacity = "0";
-                        setTimeout(() => document.getElementById("loader").style.display = "none", 500);
-                    }}, 1500);
+                    try {{
+                        const domain = "{superset_url.rstrip("/")}";
+                        await supersetEmbeddedSdk.embedDashboard({{
+                            id: "{embedded_id}",
+                            supersetDomain: domain,
+                            mountPoint: document.getElementById("dashboard-root"),
+                            fetchGuestToken: () => "{guest_token}",
+                            dashboardConfig: {{
+                                hideTitle: true,
+                                hideTab: true,
+                                hideChartControls: true,
+                                filters: {{ visible: false, expanded: false }}
+                            }},
+                            debug: true // Enable SDK Debugging
+                        }});
+                    }} catch (e) {{
+                        var log = document.getElementById('error-log');
+                        log.style.display = 'block';
+                        log.innerHTML += "SDK Error: " + e.message + "<br>" + JSON.stringify(e);
+                    }}
                 }}
                 init();
             </script>

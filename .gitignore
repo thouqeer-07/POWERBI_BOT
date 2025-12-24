@@ -6,3 +6,4 @@ grant_public_access.py
 debug_guest_token.py
 /superset
 update_env.py
+test_cloud_connection.py
