@@ -6,7 +6,7 @@ import time
 import os
 st.set_page_config(
         page_title="BI Chatbot",  
-        layout="wide"
+        layout="centered"
     )
 # --- Helper for Typewriter Effect ---
 def stream_data(text, delay=0.02):

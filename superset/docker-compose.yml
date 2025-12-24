@@ -1,0 +1,55 @@
+version: "3.8"
+services:
+  superset:
+    image: superset-custom
+    container_name: superset_app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8088:8088"
+    environment:
+      SUPERSET_SECRET_KEY: "your_secret_key_here_please_change_it"
+      SUPERSET_ROW_LIMIT: 5000
+      SUPERSET_WEBSERVER_THREADS: 2
+      SUPERSET_ENV: "development"
+      SUPERSET_LOAD_EXAMPLES: "yes"
+      SUPERSET_USERNAME: "admin"
+      SUPERSET_PASSWORD: "admin"
+    env_file:
+      - superset.env
+    volumes:
+      - ./superset_home:/app/superset_home
+      - ./superset_config.py:/app/pythonpath/superset_config.py
+    dns:
+      - 8.8.8.8
+    restart: always
+    depends_on:
+
+      - redis
+
+  superset-init:
+    image: superset-custom
+    container_name: superset_init
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      /bin/sh -c " superset fab create-admin --username admin --firstname Superset --lastname Admin --email admin@example.com --password admin && superset db upgrade && superset init"
+    env_file:
+      - superset.env
+    environment:
+      SUPERSET_SECRET_KEY: "your_secret_key_here_please_change_it"
+    dns:
+      - 8.8.8.8
+    depends_on:
+
+      - redis
+
+  redis:
+    image: redis:7
+    container_name: superset_redis
+    restart: always
+
+volumes:
+  superset_home:
