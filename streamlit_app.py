@@ -318,9 +318,15 @@ with st.sidebar:
     # Try to find the 'Supabase_Cloud' database automatically (using session_state to avoid redundant API calls)
     if "superset_db_id" not in st.session_state:
         # Use cached lookup for speed (instant if previously found)
-        db_id = get_cached_database_id("Supabase_Cloud")
-        if db_id:
-            st.session_state["superset_db_id"] = db_id
+        try:
+            db_id = get_cached_database_id("Supabase_Cloud")
+            if db_id:
+                st.session_state["superset_db_id"] = db_id
+        except Exception as e:
+            st.error(f"⚠️ Connection Error: Failed to connect to Superset API via Cloudflare.")
+            st.code(f"Details: {e}")
+            st.write("Retrying locally...")
+            # Do not crash, let the code fall through to the manual addition check
         else:
             with st.spinner("Connecting Superset to Database..."):
                 try:
