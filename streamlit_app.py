@@ -49,10 +49,13 @@ else:
 
 # Initialize Superset Client
 @st.cache_resource
-def get_superset_client(version="1.0.1"): # Bump version to force cache clear
-    # Fetch public URL from secrets if available
+def get_superset_client(version="1.0.2"): # Bump version to force cache clear
+    # Internal API URL (Bot -> Superset)
+    api_url = st.secrets.get("SUPERSET_URL") or os.getenv("SUPERSET_URL") or "http://localhost:8088"
+    # Public URL (Browser -> Superset)
     public_url = st.secrets.get("SUPERSET_PUBLIC_URL") or os.getenv("SUPERSET_PUBLIC_URL")
-    return SupersetClient(superset_url=public_url)
+    
+    return SupersetClient(api_url=api_url, public_url=public_url)
 
 try:
     sup = get_superset_client()
@@ -164,8 +167,8 @@ def render_superset_embedded(dashboard_id, height=800):
         guest_token = sup.get_guest_token(dashboard_id)
         
         # 3. Determine Superset URL for the SDK
-        # We need the public URL if it exists
-        superset_url = st.secrets.get("SUPERSET_PUBLIC_URL") or os.getenv("SUPERSET_PUBLIC_URL", sup.superset_url)
+        # 3. We use the public URL for the browser
+        superset_url = sup.public_url
         
         # 4. Injected SDK HTML with Invisible Ngrok Bypass
         html_code = f"""

@@ -5,3 +5,4 @@
 grant_public_access.py  
 /superset
 debug_guest_token.py
+update_env.py

@@ -26,7 +26,7 @@ class SupersetClient:
       you typically need a writable database and Superset configured with that database.
     """
 
-    def __init__(self, superset_url=None, api_key=None, username=None, password=None, database_id=None):
+    def __init__(self, api_url=None, public_url=None, api_key=None, username=None, password=None, database_id=None):
         # Helper to get secret/env
         def get_conf(key, default=None):
             val = None
@@ -37,7 +37,16 @@ class SupersetClient:
                     pass
             return val or os.getenv(key) or default
 
-        self.superset_url = (superset_url or get_conf("SUPERSET_PUBLIC_URL") or get_conf("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
+        # Internal API URL (used by this script to talk to Superset)
+        self.api_url = (api_url or get_conf("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
+        
+        # Public URL (used by the browser to embed dashboards)
+        # Fallback to api_url if not provided
+        self.public_url = (public_url or get_conf("SUPERSET_PUBLIC_URL") or self.api_url).rstrip("/")
+        
+        # Backward compatibility for code that still uses self.superset_url
+        self.superset_url = self.api_url
+        
         self.api_key = api_key or get_conf("SUPERSET_API_KEY")
         self.username = username or get_conf("SUPERSET_USERNAME")
         self.password = password or get_conf("SUPERSET_PASSWORD")
@@ -101,7 +110,7 @@ class SupersetClient:
     def _request(self, method, endpoint, **kwargs):
         """Wrapper for requests with auto-reauthentication and retries."""
         endpoint = endpoint.lstrip("/")
-        url = f"{self.superset_url}/{endpoint}"
+        url = f"{self.api_url}/{endpoint}"
         
         # Ensure headers are present
         if "headers" not in kwargs:
@@ -189,7 +198,7 @@ class SupersetClient:
         if not (self.username and self.password):
             raise RuntimeError("No API key or username/password configured for Superset authentication")
         
-        url = f"{self.superset_url}/api/v1/security/login"
+        url = f"{self.api_url}/api/v1/security/login"
         payload = {"username": self.username, "password": self.password, "provider": "db"}
         
         headers = {
@@ -219,7 +228,7 @@ class SupersetClient:
     def _get_csrf_token(self):
         """Fetch CSRF token using the current session/token."""
         # This is a special case, we don't use _request to avoid infinite recursion if it fails
-        url = f"{self.superset_url}/api/v1/security/csrf_token/"
+        url = f"{self.api_url}/api/v1/security/csrf_token/"
         headers = {
             "Authorization": f"Bearer {self._token}",
             "ngrok-skip-browser-warning": "true"
@@ -914,7 +923,7 @@ class SupersetClient:
         return resp.json()
 
     def dashboard_url(self, dashboard_id):
-        return f"{self.superset_url}/superset/dashboard/{dashboard_id}/"
+        return f"{self.public_url}/superset/dashboard/{dashboard_id}/"
 
     def delete_dashboard(self, dashboard_id):
         """Delete a dashboard by ID."""
