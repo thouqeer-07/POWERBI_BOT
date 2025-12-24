@@ -1003,8 +1003,12 @@ class SupersetClient:
         try:
             resp = self._request("GET", f"api/v1/dashboard/{dashboard_id}/embedded", timeout=10)
             if resp.ok:
-                embedded_uuid = resp.json().get("result", {}).get("uuid")
-        except Exception:
+                data = resp.json().get("result", {})
+                embedded_uuid = data.get("uuid")
+                current_domains = data.get("allowed_domains", [])
+                print(f"DEBUG: Found existing embedded config. UUID: {embedded_uuid}, Current Domains: {current_domains}")
+        except Exception as e:
+            print(f"DEBUG: Error checking existing embedded config: {e}")
             pass
             
         # 2. Always update/create it to ensure allowed_domains is correctly set (e.g. ['*'])
