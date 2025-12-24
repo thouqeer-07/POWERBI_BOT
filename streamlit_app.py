@@ -170,17 +170,14 @@ def render_superset_embedded(dashboard_id, height=800):
         # 3. We use the public URL for the browser
         superset_url = sup.public_url.rstrip("/")
         
-        # VISIBLE DEBUGGER
-        st.info(f"Connecting to: `{superset_url}` | Dashboard UUID: `{embedded_id}`")
         if not guest_token:
-            st.error("❌ Failed to generate Guest Token")
-            return
+            # Just log to console/terminal if needed, or ignore if public access works
+            print("Warning: Failed to generate guest token")
 
         # FALLBACK TO DIRECT IFRAME (Simplest Method)
         # Since we have enabled Public Access, we don't need the complex SDK.
         dashboard_url = f"{sup.public_url.rstrip('/')}/superset/dashboard/{dashboard_id}/?standalone=true"
         
-        st.info(f"Loading direct view: {dashboard_url}")
         
         # Simple Iframe
         components.iframe(dashboard_url, height=height, scrolling=True)
