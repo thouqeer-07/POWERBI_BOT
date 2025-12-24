@@ -82,24 +82,6 @@ def render_fullscreen_iframe(url, height=800):
             if DEBUG:
                 print(f"DEBUG: Swapped iframe URL to public: {url}")
 
-    # Bypass ngrok interstitial if public URL is used
-    if "ngrok" in url:
-        if "?" in url:
-            url += "&ngrok-skip-browser-warning=true"
-        else:
-            url += "?ngrok-skip-browser-warning=true"
-    
-    # Add a direct launch link to help set cookies if the iframe is blocked
-    st.markdown(f"""
-        <div style="text-align: right; margin-bottom: 10px;">
-            <a href="{url}" target="_blank" style="text-decoration: none;">
-                <button style="background-color: #007bff; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                    🚀 Launch Dashboard in New Tab
-                </button>
-            </a>
-        </div>
-    """, unsafe_allow_html=True)
-
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -139,7 +121,7 @@ def render_fullscreen_iframe(url, height=800):
     <body>
         <div class="container" id="dash-container-{url.__hash__()}">
             <button class="fullscreen-btn" onclick="toggleFullScreen()">&#x26F6; Full Screen</button>
-            <iframe src="{url}{'&' if '?' in url else '?'}standalone=true&show_filters=0&expand_filters=0" allowfullscreen></iframe>
+            <iframe src="{url}?standalone=true&show_filters=0&expand_filters=0" allowfullscreen></iframe>
         </div>
         <script>
             function toggleFullScreen() {{
@@ -167,6 +149,70 @@ def render_fullscreen_iframe(url, height=800):
     </html>
     """
     components.html(html_code, height=height, scrolling=False)
+ 
+def render_superset_embedded(dashboard_id, height=800):
+    """Render a Superset dashboard using the Embedded SDK and Guest Tokens."""
+    try:
+        # 1. Get or Create Embedded Config (to get embedded_id UUID)
+        embedded_id = sup.get_or_create_embedded_config(dashboard_id)
+        
+        # 2. Fetch Guest Token
+        guest_token = sup.get_guest_token(dashboard_id)
+        
+        # 3. Determine Superset URL for the SDK
+        # We need the public URL if it exists
+        superset_url = st.secrets.get("SUPERSET_PUBLIC_URL") or os.getenv("SUPERSET_PUBLIC_URL", sup.superset_url)
+        
+        # 4. Injected SDK HTML
+        # We use a reliable CDN for the Superset Embedded SDK
+        html_code = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <script src="https://unpkg.com/@superset-ui/embedded-sdk"></script>
+            <style>
+                body, html, #dashboard {{
+                    margin: 0;
+                    padding: 0;
+                    width: 100%;
+                    height: {height}px;
+                    overflow: hidden;
+                }}
+                iframe {{
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                }}
+            </style>
+        </head>
+        <body>
+            <div id="dashboard"></div>
+            <script>
+                supersetEmbeddedSdk.embedDashboard({{
+                    id: "{embedded_id}",
+                    supersetDomain: "{superset_url.rstrip("/")}",
+                    mountPoint: document.getElementById("dashboard"),
+                    fetchGuestToken: () => "{guest_token}",
+                    dashboardConfig: {{
+                        hideTitle: true,
+                        hideTab: true,
+                        hideChartControls: true,
+                        filters: {{
+                            visible: false,
+                            expanded: false,
+                        }}
+                    }},
+                }});
+            </script>
+        </body>
+        </html>
+        """
+        components.html(html_code, height=height, scrolling=False)
+    except Exception as e:
+        st.error(f"Failed to load embedded dashboard: {e}")
+        # Fallback to simple iframe if SDK fails
+        url = sup.dashboard_url(dashboard_id)
+        render_fullscreen_iframe(url, height=height)
  
 def scroll_to_top():
     """Inject Javascript to scroll the page to the top robustly."""
@@ -292,7 +338,6 @@ Example JSON output structure:
     return []
 
 st.title("Superset AI Assistant")
-st.info("⚠️ **Action Required:** Please ensure **Third-Party Cookies** are enabled in your browser settings for the dashboards to load correctly. If the dashboard is blocked, click the **Launch Dashboard** button above it.")
 
 # Sidebar for File Upload
 with st.sidebar:
@@ -419,9 +464,9 @@ if "dashboard_plan" in st.session_state:
     # ---------------------------------------------------------
     if st.session_state.get("waiting_for_dashboard_confirmation"):
         st.header("✅ Dashboard Created!")
-        st.write("Please review the dashboard below.")
         dash_url = st.session_state.get("created_dashboard_url")
-        render_fullscreen_iframe(dash_url, height=800)
+        dash_id = st.session_state.get("created_dashboard_id")
+        render_superset_embedded(dash_id, height=800)
         
         c1, c2 = st.columns(2)
         if c1.button("Confirm & Keep"):

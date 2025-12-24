@@ -970,3 +970,47 @@ class SupersetClient:
         except Exception as e:
             print(f"Warning: Could not fetch columns for dataset {dataset_id}: {e}")
         return []
+
+    def get_guest_token(self, dashboard_id, resources=None, user_info=None):
+        """Fetch a guest token for the given dashboard."""
+        if resources is None:
+            resources = [{"type": "dashboard", "id": str(dashboard_id)}]
+        if user_info is None:
+            user_info = {"username": "guest", "first_name": "Guest", "last_name": "User"}
+        
+        payload = {
+            "user": user_info,
+            "resources": resources,
+            "rls": []
+        }
+        
+        resp = self._request("POST", "api/v1/security/guest_token/", json=payload, timeout=30)
+        if not resp.ok:
+            # Fallback to direct request if _request wrapper has issues with this specific endpoint
+            print(f"DEBUG: Guest token request failed with status {resp.status_code}: {resp.text}")
+            resp.raise_for_status()
+            
+        data = resp.json()
+        return data.get("token") or data.get("result", {}).get("token")
+
+    def get_or_create_embedded_config(self, dashboard_id, allowed_domains=None):
+        """Get or create the embedded configuration for a dashboard and return the embedded_id (UUID)."""
+        if allowed_domains is None:
+            allowed_domains = ["*"]
+            
+        # 1. Try to get existing config
+        try:
+            resp = self._request("GET", f"api/v1/dashboard/{dashboard_id}/embedded", timeout=10)
+            if resp.ok:
+                return resp.json().get("result", {}).get("uuid")
+        except Exception:
+            pass
+            
+        # 2. If not found, create it
+        payload = {"allowed_domains": allowed_domains}
+        resp = self._request("POST", f"api/v1/dashboard/{dashboard_id}/embedded", json=payload, timeout=10)
+        if not resp.ok:
+            print(f"DEBUG: Failed to create embedded config for dashboard {dashboard_id}: {resp.text}")
+            resp.raise_for_status()
+            
+        return resp.json().get("result", {}).get("uuid")
