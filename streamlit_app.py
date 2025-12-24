@@ -191,36 +191,28 @@ def render_superset_embedded(dashboard_id, height=800):
             <div id="loader">🚀 Preparing Dashboard...</div>
             <div id="dashboard-root"></div>
             <script>
-                async function init() {{
+                async function init() {
                     const domain = "{superset_url.rstrip("/")}";
-                    try {{
-                        // Bypassing ngrok "Visit Site" warning page automatically
-                        // This fetch sets the 'ngrok-skip-browser-warning' cookie for the domain
-                        await fetch(domain + "/", {{
-                            mode: 'no-cors',
-                            headers: {{ 'ngrok-skip-browser-warning': 'true' }}
-                        }});
-                    }} catch (e) {{ console.error("Ngrok bypass failed", e); }}
-
-                    supersetEmbeddedSdk.embedDashboard({{
+                    
+                    supersetEmbeddedSdk.embedDashboard({
                         id: "{embedded_id}",
                         supersetDomain: domain,
                         mountPoint: document.getElementById("dashboard-root"),
                         fetchGuestToken: () => "{guest_token}",
-                        dashboardConfig: {{
+                        dashboardConfig: {
                             hideTitle: true,
                             hideTab: true,
                             hideChartControls: true,
-                            filters: {{ visible: false, expanded: false }}
-                        }},
-                    }});
+                            filters: { visible: false, expanded: false }
+                        },
+                    });
                     
                     // Hide loader once SDK starts loading
-                    setTimeout(() => {{
+                    setTimeout(() => {
                         document.getElementById("loader").style.opacity = "0";
                         setTimeout(() => document.getElementById("loader").style.display = "none", 500);
-                    }}, 1500);
-                }}
+                    }, 1500);
+                }
                 init();
             </script>
         </body>
