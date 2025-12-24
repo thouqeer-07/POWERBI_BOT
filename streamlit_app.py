@@ -82,6 +82,24 @@ def render_fullscreen_iframe(url, height=800):
             if DEBUG:
                 print(f"DEBUG: Swapped iframe URL to public: {url}")
 
+    # Bypass ngrok interstitial if public URL is used
+    if "ngrok" in url:
+        if "?" in url:
+            url += "&ngrok-skip-browser-warning=true"
+        else:
+            url += "?ngrok-skip-browser-warning=true"
+    
+    # Add a direct launch link to help set cookies if the iframe is blocked
+    st.markdown(f"""
+        <div style="text-align: right; margin-bottom: 10px;">
+            <a href="{url}" target="_blank" style="text-decoration: none;">
+                <button style="background-color: #007bff; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                    🚀 Launch Dashboard in New Tab
+                </button>
+            </a>
+        </div>
+    """, unsafe_allow_html=True)
+
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -121,7 +139,7 @@ def render_fullscreen_iframe(url, height=800):
     <body>
         <div class="container" id="dash-container-{url.__hash__()}">
             <button class="fullscreen-btn" onclick="toggleFullScreen()">&#x26F6; Full Screen</button>
-            <iframe src="{url}?standalone=true&show_filters=0&expand_filters=0" allowfullscreen></iframe>
+            <iframe src="{url}{'&' if '?' in url else '?'}standalone=true&show_filters=0&expand_filters=0" allowfullscreen></iframe>
         </div>
         <script>
             function toggleFullScreen() {{
@@ -274,6 +292,7 @@ Example JSON output structure:
     return []
 
 st.title("Superset AI Assistant")
+st.info("⚠️ **Action Required:** Please ensure **Third-Party Cookies** are enabled in your browser settings for the dashboards to load correctly. If the dashboard is blocked, click the **Launch Dashboard** button above it.")
 
 # Sidebar for File Upload
 with st.sidebar:
