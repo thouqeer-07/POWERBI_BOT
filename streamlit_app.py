@@ -163,13 +163,19 @@ def render_superset_embedded(dashboard_id, height=800):
         # 1. Get or Create Embedded Config (to get embedded_id UUID)
         embedded_id = sup.get_or_create_embedded_config(dashboard_id)
         
-        # 2. Fetch Guest Token
-        guest_token = sup.get_guest_token(dashboard_id)
+        # 2. Fetch Guest Token using the UUID (Critical for permission sync)
+        guest_token = sup.get_guest_token(embedded_id)
         
         # 3. Determine Superset URL for the SDK
         # 3. We use the public URL for the browser
-        superset_url = sup.public_url
+        superset_url = sup.public_url.rstrip("/")
         
+        # VISIBLE DEBUGGER
+        st.info(f"Connecting to: `{superset_url}` | Dashboard UUID: `{embedded_id}`")
+        if not guest_token:
+            st.error("❌ Failed to generate Guest Token")
+            return
+
         # 4. Injected SDK HTML with Invisible Ngrok Bypass
         html_code = f"""
         <!DOCTYPE html>

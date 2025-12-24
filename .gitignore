@@ -1,8 +1,8 @@
 .env
 .env.example
-
-/.venv
-grant_public_access.py  
 /superset
+/.venv
+grant_public_access.py
 debug_guest_token.py
+/superset
 update_env.py
