@@ -4,7 +4,10 @@ import streamlit.components.v1 as components
 import re
 import time
 import os
-
+st.set_page_config(
+        page_title="BI Chatbot",  
+        layout="wide"
+    )
 # --- Helper for Typewriter Effect ---
 def stream_data(text, delay=0.02):
     for word in text.split(" "):
