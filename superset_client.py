@@ -51,6 +51,7 @@ class SupersetClient:
         self.username = username or get_conf("SUPERSET_USERNAME")
         self.password = password or get_conf("SUPERSET_PASSWORD")
         self.database_id = database_id or get_conf("SUPERSET_DATABASE_ID")
+        self.db_uri = get_conf("DB_URI") # Cache this once on init (main thread)
         self._token = None
         self.session = requests.Session()
         self._csrf_token = None
@@ -62,17 +63,11 @@ class SupersetClient:
         except ImportError:
             raise RuntimeError("psycopg2 not installed. Run: pip install psycopg2-binary")
 
-        # Helper to get secret/env
-        def get_conf(key):
-            val = None
-            if st and hasattr(st, "secrets"):
-                val = st.secrets.get(key)
-            return val or os.getenv(key)
-
         # 1. Use DB_URI for both Data and Metadata (Unified Setup)
-        db_uri = get_conf("DB_URI")
+        # Use cached self.db_uri to avoid st.secrets access in threads
+        db_uri = self.db_uri 
         if db_uri:
-            print(f"DEBUG: Connecting to database using DB_URI...")
+            # print(f"DEBUG: Connecting to database using DB_URI...")
             return psycopg2.connect(db_uri, connect_timeout=10)
         
         # 2. Fallback to Localhost (Local development only)
