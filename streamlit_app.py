@@ -536,8 +536,9 @@ if "dashboard_plan" in st.session_state:
                 
                 created_chart_ids = []
                 # Optimization: Parallel Chart Creation
+                # Optimization: Parallel Chart Creation
                 def create_single_chart(chart):
-                    status.write(f"Creating chart: {chart['title']}...")
+                    # NOTE: Do NOT call st.write or status.write here to avoid Missing ScriptRunContext errors in threads.
                     viz_map = {
                         "dist_bar": "echarts_timeseries_bar", 
                         "bar": "echarts_timeseries_bar",
@@ -586,7 +587,7 @@ if "dashboard_plan" in st.session_state:
                         c_resp = sup.create_chart(dataset_id, chart["title"], actual_viz, params)
                         chart_id = c_resp.get("id")
                         chart_uuid = str(uuid.uuid4())
-                        return {"id": chart_id, "uuid": chart_uuid}
+                        return {"id": chart_id, "uuid": chart_uuid, "title": chart["title"]}
                     except Exception as e:
                         print(f"Failed to create chart '{chart['title']}': {e}")
                         return None
@@ -603,6 +604,8 @@ if "dashboard_plan" in st.session_state:
                          if result:
                              c_id = result["id"]
                              c_uuid = result["uuid"]
+                             title = result.get("title", "Chart")
+                             status.write(f"Created: {title}") # Update UI from Main Thread
                              created_chart_ids.append(c_id)
                              
                              # Store mapping (using session state inside thread safety usually fine if just dict assign)
