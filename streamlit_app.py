@@ -158,32 +158,24 @@ def render_fullscreen_iframe(url, height=800):
     components.html(html_code, height=height, scrolling=False)
  
 def render_superset_embedded(dashboard_id, height=800):
-    """Render a Superset dashboard using the Embedded SDK and Guest Tokens."""
+    """Render a Superset dashboard using Direct Iframe (Fastest)."""
     try:
-        # 1. Get or Create Embedded Config (to get embedded_id UUID)
-        embedded_id = sup.get_or_create_embedded_config(dashboard_id)
+        # Optimization: We use Public Access, so we skip the expensive Guest Token/Embedded SDK calls.
+        # This saves 2-3 API roundtrips (approx 5-10 seconds).
         
-        # 2. Fetch Guest Token using the UUID (Critical for permission sync)
-        guest_token = sup.get_guest_token(embedded_id)
-        
-        # 3. Determine Superset URL for the SDK
-        # 3. We use the public URL for the browser
-        superset_url = sup.public_url.rstrip("/")
-        
-        if not guest_token:
-            # Just log to console/terminal if needed, or ignore if public access works
-            print("Warning: Failed to generate guest token")
-
-        # FALLBACK TO DIRECT IFRAME (Simplest Method)
-        # Since we have enabled Public Access, we don't need the complex SDK.
+        # 1. Construct Public Dashboard URL
+        # e.g. .../superset/dashboard/{id}/?standalone=true
         dashboard_url = f"{sup.public_url.rstrip('/')}/superset/dashboard/{dashboard_id}/?standalone=true"
         
+        if DEBUG:
+            print(f"DEBUG: Rendering dashboard directly: {dashboard_url}")
         
-        # Simple Iframe
+        # 2. Simple Iframe
         components.iframe(dashboard_url, height=height, scrolling=True)
+        
     except Exception as e:
-        st.error(f"Failed to load embedded dashboard: {e}")
-        # Fallback to simple iframe if SDK fails
+        st.error(f"Failed to load dashboard: {e}")
+        # Fallback
         url = sup.dashboard_url(dashboard_id)
         render_fullscreen_iframe(url, height=height)
  
