@@ -535,7 +535,8 @@ if "dashboard_plan" in st.session_state:
                         st.stop()
                 
                 created_chart_ids = []
-                for chart in updated_plan:
+                # Optimization: Parallel Chart Creation
+                def create_single_chart(chart):
                     status.write(f"Creating chart: {chart['title']}...")
                     viz_map = {
                         "dist_bar": "echarts_timeseries_bar", 
@@ -584,19 +585,35 @@ if "dashboard_plan" in st.session_state:
                     try:
                         c_resp = sup.create_chart(dataset_id, chart["title"], actual_viz, params)
                         chart_id = c_resp.get("id")
-                        created_chart_ids.append(chart_id)
-                        # Generate a unique identifier for this chart
                         chart_uuid = str(uuid.uuid4())
-                        # Store mapping in session state
-                        if "chart_uuid_map" not in st.session_state:
-                            st.session_state["chart_uuid_map"] = {}
-                        st.session_state["chart_uuid_map"][chart_uuid] = chart_id
-                        # Keep list of uuids for later deletion
-                        if "created_chart_uuids" not in st.session_state:
-                            st.session_state["created_chart_uuids"] = []
-                        st.session_state["created_chart_uuids"].append(chart_uuid)
+                        return {"id": chart_id, "uuid": chart_uuid}
                     except Exception as e:
-                        status.warning(f"Failed to create chart '{chart['title']}': {e}")
+                        print(f"Failed to create chart '{chart['title']}': {e}")
+                        return None
+
+                created_chart_ids = []
+                
+                # Execute in parallel
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                     # Submit all tasks
+                     future_to_chart = {executor.submit(create_single_chart, chart): chart for chart in updated_plan}
+                     
+                     for future in concurrent.futures.as_completed(future_to_chart):
+                         result = future.result()
+                         if result:
+                             c_id = result["id"]
+                             c_uuid = result["uuid"]
+                             created_chart_ids.append(c_id)
+                             
+                             # Store mapping (using session state inside thread safety usually fine if just dict assign)
+                             if "chart_uuid_map" not in st.session_state:
+                                 st.session_state["chart_uuid_map"] = {}
+                             st.session_state["chart_uuid_map"][c_uuid] = c_id
+                             
+                             if "created_chart_uuids" not in st.session_state:
+                                 st.session_state["created_chart_uuids"] = []
+                             st.session_state["created_chart_uuids"].append(c_uuid)
+
                 
                 if created_chart_ids:
                     status.write("Creating Dashboard container...")
