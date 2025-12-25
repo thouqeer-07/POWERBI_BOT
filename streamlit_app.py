@@ -403,6 +403,7 @@ if 'upload_clicked' in locals() and upload_clicked and uploaded_file:
             with st.spinner("🤖 AI is analyzing your dataset..."):
                 plan = get_llama_suggestions(df, table_name)
             st.session_state["dashboard_plan"] = plan
+            st.session_state["show_review_plan"] = True # Ensure review screen shows on new load
             # Remove st.rerun() here - let Streamlit update the UI naturally on next script execution
             # Since we just updated session_state, the next block will see it.
         except Exception as e:
@@ -506,6 +507,7 @@ if "dashboard_plan" in st.session_state:
                     if deleted_count > 0:
                         st.toast(f"Deleted {deleted_count} charts.")
             
+            st.session_state["show_review_plan"] = True # Re-enable review screen
             st.info("Dashboard rejected. You can modify the plan below.")
             st.rerun()
 
@@ -529,6 +531,7 @@ if "dashboard_plan" in st.session_state:
                     except Exception as e:
                         status.error(f"Could not ensure dataset: {e}")
                         if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"] # Reset on critical error
+                        st.session_state["show_review_plan"] = True # Re-enable review screen
                         st.stop()
                 
                 created_chart_ids = []
@@ -622,15 +625,17 @@ if "dashboard_plan" in st.session_state:
                     status.error("No charts were successfully created.")
                     # Allow retry
                     if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
+                    st.session_state["show_review_plan"] = True # Re-enable review screen
             except Exception as e:
                 status.error(f"Process failed: {e}")
                 # Allow retry
                 if "is_building_dashboard" in st.session_state: del st.session_state["is_building_dashboard"]
+                st.session_state["show_review_plan"] = True # Re-enable review screen
 
     # ---------------------------------------------------------
     # STATE 3: INPUT FORM (Default)
     # ---------------------------------------------------------
-    else:
+    elif st.session_state.get("show_review_plan", True):
         with st.expander("📊 Review Dashboard Plan", expanded=True):
             st.header("📊 Dashboard Plan Review")
             st.write("I've analyzed your data and prepared the following charts. You can edit them before we build the dashboard.")
@@ -676,6 +681,7 @@ if "dashboard_plan" in st.session_state:
                 # Transition to Building State
                 st.session_state["pending_dashboard_plan"] = updated_plan
                 st.session_state["is_building_dashboard"] = True
+                st.session_state["show_review_plan"] = False # Hide review screen while building
                 st.rerun()
 
 
