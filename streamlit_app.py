@@ -196,51 +196,7 @@ def scroll_to_top():
 import time
 
 
-# Removed local Llama functions (now in ai_manager.py)
-                
-                # 5. Logical Consistency Checks (The "Perfect" Logic)
-                
-                # Rule A: Line Charts MUST have a Time column or Ordered Number as Group By
-                if p["viz_type"] == "line":
-                    # If group_by is not a date time...
-                    is_time = False
-                    if p["group_by"]:
-                        if p["group_by"] in datetime_cols:
-                            is_time = True
-                        elif "date" in p["group_by"].lower() or "year" in p["group_by"].lower() or "month" in p["group_by"].lower():
-                             # Name heuristic
-                             is_time = True
-                    
-                    if not is_time:
-                         # Fallback to Bar Chart if no time dimension found
-                         p["viz_type"] = "dist_bar"
-                
-                # Rule B: Pie Charts should have a Group By
-                if p["viz_type"] == "pie" and not p["group_by"]:
-                     # Find a low cardinality column? or just pick the first object col
-                     obj_cols = df.select_dtypes(include=['object', 'category']).columns
-                     if len(obj_cols) > 0:
-                         p["group_by"] = obj_cols[0]
-                     else:
-                         # No categories? Switch to Big Number
-                         p["viz_type"] = "big_number_total"
-                
-                # Rule C: Big Number should NOT have a Group By
-                if p["viz_type"] == "big_number_total":
-                    p["group_by"] = None
 
-                validated_plans.append(p)
-
-            return validated_plans
-        except Exception as e:
-            if attempt == retries - 1:
-                st.error(f"Llama suggestion failed (Final Attempt): {e}")
-                st.error("Hugging Face API is experiencing issues. Please try again later.")
-                return []
-            else:
-                st.warning(f"Llama suggestion failed (Attempt {attempt+1}/{retries}). Retrying... Error: {e}")
-            time.sleep(2 ** attempt)
-    return []
 
 st.title("Superset AI Assistant")
 
@@ -634,61 +590,7 @@ if "dashboard_plan" in st.session_state:
                 st.rerun()
 
 
-# Chat Logic
-# Handle Chat Prompt is now in ai_manager.py
 
-                                   if y_match:
-                                        # e.g. "Mean Annual Income" -> try to match column
-                                        raw_val = y_match.group(1).strip()
-                                        chart_fallback["metric"] = raw_val
-
-                              # 4. GroupBy/X-axis from Text (if not found above)
-                              if "group_by" not in chart_fallback or not chart_fallback["group_by"]:
-                                   x_match = re.search(r'(?:\*\*|)?(?:X-axis|Grouping)(?:\*\*|)?\s*:\s*(.+)', desc_text, re.IGNORECASE)
-                                   if x_match:
-                                       chart_fallback["group_by"] = x_match.group(1).strip()
-
-                         return chart_fallback
-                     except Exception:
-                         pass # Failed manual extraction too
-                
-                # Check if we can extract "text" manually if it looks like JSON
-
-                text_match = re.search(r'"text"\s*:\s*"(.*?)"', clean_text, re.DOTALL)
-                if text_match:
-                     # We found a text field, let's use it.
-                     extracted_text = text_match.group(1).replace(r'\"', '"').replace(r'\\n', '\n')
-                     return {"action": "answer", "text": extracted_text}
-
-                # Otherwise, assume it's just a conversational response that failed JSON format
-                # We interpret the WHOLE raw text as the answer.
-
-                
-                # Heuristic: Check if user wanted to show data and model replied with text "Here is the data" but failed formatting
-                text_lower = text.lower()
-                if "show_data" in text_lower or ("here" in text_lower and "data" in text_lower and "dataset" not in text_lower): 
-                     # Loose match: "Here is the data" or "show_data" in text
-                     return {"action": "show_data", "text": text}
-
-                return {"action": "answer", "text": text}
-            
-        except Exception as e:
-            # Check for network/DNS errors
-            error_str = str(e)
-            if "getaddrinfo failed" in error_str or "ConnectionError" in error_str:
-                st.warning(f"Network error: Unable to connect to AI (Attempt {attempt+1}). Checking connection...")
-                if attempt == retries - 1:
-                     return {"action": "answer", "text": "I seem to be offline or cannot reach the AI server. Please check your internet connection."}
-            else:
-                st.warning(f"Llama chat attempt {attempt+1} issue: {e}")
-            
-            if attempt == retries - 1:
-                # Final fallback
-                if 'text' in locals() and text:
-                     return {"action": "answer", "text": text}
-                return {"action": "answer", "text": f"Error: {e}"}
-            time.sleep(2 ** attempt)
-    return {"action": "answer", "text": "I'm having trouble connecting to the AI. Please try again later."}
 
 if not st.session_state.get("current_dataset_id"):
     st.info("👋 Welcome! Please upload a dataset in the sidebar to start chatting.")
