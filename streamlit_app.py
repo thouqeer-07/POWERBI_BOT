@@ -249,6 +249,14 @@ Example JSON output structure:
   }}
 ]
 """
+"""
+    # Helper for validation
+    valid_cols = set(df.columns)
+    numeric_cols = set(df.select_dtypes(include=['number']).columns)
+    datetime_cols = set(df.select_dtypes(include=['datetime', 'datetimetz']).columns)
+    # Heuristic: object columns that look like dates?
+    # For now, rely on strict dtypes or name matching
+    
     for attempt in range(retries):
         try:
             # Use chat_completion for conversational Llama models
@@ -263,31 +271,85 @@ Example JSON output structure:
             if match:
                 text = match.group(0)
             
-            plans = json.loads(text)
+            try:
+                plans = json.loads(text)
+            except json.JSONDecodeError:
+                if attempt == retries - 1: raise
+                continue
+
             validated_plans = []
-            valid_cols = set(df.columns)
             
             for p in plans:
-                # Sanitize strings
-                if str(p.get("group_by")).lower() in ["null", "none", ""]:
-                    p["group_by"] = None
+                # 1. Sanitize Basic Fields
+                p["title"] = p.get("title", "Untitled Chart").strip()
+                p["viz_type"] = p.get("viz_type", "dist_bar").strip().lower()
                 
-                # Default title
-                if not p.get("title"):
-                    p["title"] = f"{p.get('viz_type', 'Chart')} of {p.get('metric', 'data')}"
-
-                # Validate Metric
-                if p.get("metric") != "count" and p.get("metric") not in valid_cols:
-                    p["metric"] = "count" # Fallback
+                # 2. Validate Aggregation Function
+                p["agg_func"] = p.get("agg_func", "COUNT").upper()
+                if p["agg_func"] not in ["SUM", "AVG", "COUNT", "MAX", "MIN"]:
+                    p["agg_func"] = "COUNT"
                 
-                # Validate Group By
-                if p.get("group_by") and p.get("group_by") not in valid_cols:
-                    # Attempt to find a valid object/category column
-                    cat_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
-                    if cat_cols:
-                        p["group_by"] = cat_cols[0]
+                # 3. Validate Metric
+                raw_metric = p.get("metric")
+                if raw_metric:
+                    # Fuzzy match metric column
+                    matches = difflib.get_close_matches(raw_metric, list(valid_cols), n=1, cutoff=0.7)
+                    if matches:
+                         p["metric"] = matches[0]
+                    elif raw_metric.lower() == "count":
+                         p["metric"] = "count"
                     else:
-                        p["group_by"] = None
+                         p["metric"] = "count" # Fallback if unknown
+                else:
+                    p["metric"] = "count"
+                
+                # Ensure only numeric columns use aggregations other than COUNT/MAX/MIN (heuristic)
+                # If doing SUM/AVG on non-numeric, Superset might fail. 
+                if p["metric"] != "count" and p["metric"] not in numeric_cols and p["agg_func"] in ["SUM", "AVG"]:
+                     p["agg_func"] = "COUNT"
+
+
+                # 4. Validate Group By
+                raw_group = p.get("group_by")
+                if str(raw_group).lower() in ["null", "none", ""]:
+                    p["group_by"] = None
+                elif raw_group:
+                     matches = difflib.get_close_matches(raw_group, list(valid_cols), n=1, cutoff=0.7)
+                     if matches:
+                         p["group_by"] = matches[0]
+                     else:
+                         p["group_by"] = None
+                
+                # 5. Logical Consistency Checks (The "Perfect" Logic)
+                
+                # Rule A: Line Charts MUST have a Time column or Ordered Number as Group By
+                if p["viz_type"] == "line":
+                    # If group_by is not a date time...
+                    is_time = False
+                    if p["group_by"]:
+                        if p["group_by"] in datetime_cols:
+                            is_time = True
+                        elif "date" in p["group_by"].lower() or "year" in p["group_by"].lower() or "month" in p["group_by"].lower():
+                             # Name heuristic
+                             is_time = True
+                    
+                    if not is_time:
+                         # Fallback to Bar Chart if no time dimension found
+                         p["viz_type"] = "dist_bar"
+                
+                # Rule B: Pie Charts should have a Group By
+                if p["viz_type"] == "pie" and not p["group_by"]:
+                     # Find a low cardinality column? or just pick the first object col
+                     obj_cols = df.select_dtypes(include=['object', 'category']).columns
+                     if len(obj_cols) > 0:
+                         p["group_by"] = obj_cols[0]
+                     else:
+                         # No categories? Switch to Big Number
+                         p["viz_type"] = "big_number_total"
+                
+                # Rule C: Big Number should NOT have a Group By
+                if p["viz_type"] == "big_number_total":
+                    p["group_by"] = None
 
                 validated_plans.append(p)
 
@@ -961,7 +1023,7 @@ User: "Show me sales by region"
 
 if not st.session_state.get("current_dataset_id"):
     st.info("👋 Welcome! Please upload a dataset in the sidebar to start chatting.")
-elif prompt := st.chat_input("Ask me to create a chart or explain the data..."):
+elif prompt := st.chat_input("Ask me to create a chart or explain the data (eg:Create a line chart for Annual Income groupby Age)"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
