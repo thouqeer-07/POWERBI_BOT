@@ -839,13 +839,13 @@ If the user asks to create a chart or visual, you MUST set "action" to "create_c
 ### 👣 EXAMPLE 1 (Greeting)
 {{
     "action": "answer",
-    "text": "### 👋 Hello!\\n\\nI'm your **Data Analyst**. I'm ready to help you explore **{table_name}**.\\n\\n**What would you like to do?**\\n- 🔍 **Analyze** specific columns\\n- 📊 **Generate** a dashboard\\n- 📋 **View** the raw data"
+    "text": "### 👋 Hello!\\n\\nI'm your **Data Analyst**. I'm ready to help you explore **{{table_name}}**.\\n\\n**What would you like to do?**\\n- 🔍 **Analyze** specific columns\\n- 📊 **Generate** a dashboard\\n- 📋 **View** the raw data"
 }}
 
 ### 👣 EXAMPLE 2 (Stats)
 {{
     "action": "answer",
-    "text": "### 📊 Dataset Overview\\n\\nThe dataset **{table_name}** contains **2,500 rows** and **8 columns**.\\n\\n#### 🔑 Key Columns:\\n- **date** (Datetime): Transaction dates\\n- **revenue** (Float): Sales amounts\\n\\n> 💡 **Insight:** This appears to be a time-series dataset suitable for trend analysis."
+    "text": "### 📊 Dataset Overview\\n\\nThe dataset **{{table_name}}** contains **2,500 rows** and **8 columns**.\\n\\n#### 🔑 Key Columns:\\n- **date** (Datetime): Transaction dates\\n- **revenue** (Float): Sales amounts\\n\\n> 💡 **Insight:** This appears to be a time-series dataset suitable for trend analysis."
 }}
 
 ### 👣 EXAMPLE 3 (Create Chart)
