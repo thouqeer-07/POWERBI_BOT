@@ -310,6 +310,7 @@ class SupersetClient:
             "database": int(database_id),
             "schema": schema,
             "table_name": table_name,
+            "owners": [1], # Assign to admin to avoid permission issues
             "sql": None,
         })
         # payload where database is an object
@@ -317,6 +318,7 @@ class SupersetClient:
             "database": {"id": int(database_id)},
             "schema": schema,
             "table_name": table_name,
+            "owners": [1],
             "sql": None,
         })
 
@@ -371,6 +373,13 @@ class SupersetClient:
 
                 print(f"DEBUG: Failed with status {resp.status_code}: {body}")
                 errors.append(f"{endpoint} + {payload} => Status {resp.status_code}: {body}")
+
+        # If API methods failed, try Direct DB Insert
+        print("DEBUG: All API dataset creation attempts failed. Trying Direct DB Insert...")
+        try:
+             return self._create_dataset_direct(database_id, schema, table_name)
+        except Exception as e:
+             print(f"DEBUG: Direct DB Insert also failed: {e}")
 
         # if we reach here, all attempts failed
         raise RuntimeError(f"All dataset creation attempts failed. Errors: {json.dumps(errors, indent=2)}")
@@ -446,6 +455,57 @@ class SupersetClient:
             print(f"Warning: Could not search for existing dataset: {e}")
         return None
 
+    def _create_dataset_direct(self, database_id, schema, table_name):
+        """Create dataset using direct database insertion."""
+        import uuid
+        try:
+            import psycopg2
+        except ImportError:
+            raise RuntimeError("psycopg2 not installed")
+
+        conn = None
+        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        
+        try:
+            print(f"Creating dataset via database: {table_name}")
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
+            cursor = conn.cursor()
+            
+            # Check if it already exists first
+            check_sql = "SELECT id FROM tables WHERE table_name = %s AND database_id = %s"
+            cursor.execute(check_sql, (table_name, int(database_id)))
+            existing = cursor.fetchone()
+            if existing:
+                print(f"✅ Found existing dataset {existing[0]} during direct creation attempt.")
+                return {"id": existing[0], "table_name": table_name, "database": {"id": int(database_id)}}
+
+            # Insert new dataset
+            ds_uuid = str(uuid.uuid4())
+            sql = """
+            INSERT INTO tables (
+                table_name, schema, database_id, uuid, 
+                created_on, changed_on, created_by_fk, changed_by_fk
+            ) VALUES (%s, %s, %s, %s, NOW(), NOW(), 1, 1)
+            RETURNING id;
+            """
+            
+            cursor.execute(sql, (table_name, schema, int(database_id), ds_uuid))
+            dataset_id = cursor.fetchone()[0]
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            print(f"✅ Dataset created via database with ID: {dataset_id}")
+            return {"id": dataset_id, "table_name": table_name, "database": {"id": int(database_id)}}
+            
+        except Exception as e:
+            print(f"❌ Database dataset creation failed: {type(e).__name__}: {str(e)}")
+            if conn:
+                conn.rollback()
+                conn.close()
+            raise RuntimeError(f"Database dataset creation failed: {str(e)}")
+
     def _find_dataset_direct(self, database_id, table_name):
         """Query the Superset metadata database directly to find the table ID."""
         try:
@@ -519,6 +579,15 @@ class SupersetClient:
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
+            # Check if we should even attempt direct DB fallback
+            metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or ""
+            is_local_db = "localhost" in metadata_db_uri or "127.0.0.1" in metadata_db_uri or not metadata_db_uri
+            
+            # If in Streamlit Cloud (detected via environment) and DB is local, don't fall back
+            if os.getenv("STREAMLIT_SERVER_PORT") and is_local_db:
+                print(f"Superset API failed: {e}. Skipping local DB fallback in Cloud environment.")
+                raise RuntimeError(f"Superset API Error: {e}")
+
             # Fallback: use direct database insertion
             print(f"API chart creation failed: {e}. Trying database-direct method...")
             if "relation \"slices\" does not exist" in str(e) or "psycopg2" in str(e):
@@ -565,10 +634,13 @@ class SupersetClient:
         params_json = json.dumps(params or {})
         chart_uuid = str(uuid.uuid4())
         
-        # Connect directly to PostgreSQL (exposed on localhost:5432)
+        # Connect directly to PostgreSQL for metadata (slices, charts, etc.)
         conn = None
+        # We use a dedicated metadata URI if provided, otherwise default to local
+        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
-            conn = self._get_db_connection()
+            print(f"Attempting metadata database connection...")
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
             print(f"✅ Connected to database")
             
             cursor = conn.cursor()
@@ -640,9 +712,10 @@ class SupersetClient:
         slug = dashboard_title.lower().replace(" ", "-").replace("_", "-")
         
         conn = None
+        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Creating dashboard via database: {dashboard_title}")
-            conn = self._get_db_connection()
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
             
             cursor = conn.cursor()
             
@@ -690,6 +763,14 @@ class SupersetClient:
         try:
             return self._add_charts_to_dashboard_api(dashboard_id, chart_ids)
         except Exception as e:
+            # Check if we should fall back
+            metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or ""
+            is_local_db = "localhost" in metadata_db_uri or "127.0.0.1" in metadata_db_uri or not metadata_db_uri
+            
+            if os.getenv("STREAMLIT_SERVER_PORT") and is_local_db:
+                print(f"Superset Dashboard Link API failed: {e}. Skipping local DB fallback in Cloud environment.")
+                raise RuntimeError(f"Dashboard Link API Error: {e}")
+
             print(f"API chart linking failed: {e}. Trying database-direct method...")
             return self._add_charts_to_dashboard_direct(dashboard_id, chart_ids)
     
@@ -703,9 +784,10 @@ class SupersetClient:
             raise RuntimeError("psycopg2 not installed")
         
         conn = None
+        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Linking {len(chart_ids)} charts to dashboard {dashboard_id} via database...")
-            conn = self._get_db_connection()
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
             cursor = conn.cursor()
             
             # 1. Create position_json with charts
@@ -841,12 +923,8 @@ class SupersetClient:
         position_json["GRID_ID"]["children"] = grid_children
         
         # 3. Prepare payload
-        owners = [o["id"] for o in data.get("owners", [])]
-        
+        # 5. Submit update
         payload = {
-            "dashboard_title": data.get("dashboard_title"),
-            "slug": data.get("slug"),
-            "owners": owners,
             "position_json": json.dumps(position_json),
             "published": data.get("published", False)
         }
@@ -856,9 +934,9 @@ class SupersetClient:
         resp = self._request("PUT", f"api/v1/dashboard/{dashboard_id}/", json=payload, timeout=30)
         
         if not resp.ok:
-            print(f"DEBUG: Dashboard update failed: {resp.text}")
-            raise RuntimeError(f"Failed to update dashboard: {resp.status_code} - {resp.text}")
-            
+            print(f"DEBUG: Dashboard link API failed ({resp.status_code}): {resp.text}")
+        resp.raise_for_status()
+        
         # 5. Link charts AFTER dashboard update
         # This prevents the dashboard update from overwriting the links
         print(f"DEBUG: Linking {len(chart_ids)} charts to dashboard {dashboard_id}...")
@@ -938,9 +1016,10 @@ class SupersetClient:
             raise RuntimeError("psycopg2 not installed")
         
         conn = None
+        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Deleting dashboard {dashboard_id} via database...")
-            conn = self._get_db_connection()
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
             cursor = conn.cursor()
             
             # Delete from dashboard_slices (linking table) first
