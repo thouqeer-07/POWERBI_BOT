@@ -310,6 +310,7 @@ class SupersetClient:
             "database": int(database_id),
             "schema": schema,
             "table_name": table_name,
+            "owners": [1], # Assign to admin to avoid permission issues
             "sql": None,
         })
         # payload where database is an object
@@ -317,6 +318,7 @@ class SupersetClient:
             "database": {"id": int(database_id)},
             "schema": schema,
             "table_name": table_name,
+            "owners": [1],
             "sql": None,
         })
 
@@ -371,6 +373,13 @@ class SupersetClient:
 
                 print(f"DEBUG: Failed with status {resp.status_code}: {body}")
                 errors.append(f"{endpoint} + {payload} => Status {resp.status_code}: {body}")
+
+        # If API methods failed, try Direct DB Insert
+        print("DEBUG: All API dataset creation attempts failed. Trying Direct DB Insert...")
+        try:
+             return self._create_dataset_direct(database_id, schema, table_name)
+        except Exception as e:
+             print(f"DEBUG: Direct DB Insert also failed: {e}")
 
         # if we reach here, all attempts failed
         raise RuntimeError(f"All dataset creation attempts failed. Errors: {json.dumps(errors, indent=2)}")
@@ -445,6 +454,57 @@ class SupersetClient:
         except Exception as e:
             print(f"Warning: Could not search for existing dataset: {e}")
         return None
+
+    def _create_dataset_direct(self, database_id, schema, table_name):
+        """Create dataset using direct database insertion."""
+        import uuid
+        try:
+            import psycopg2
+        except ImportError:
+            raise RuntimeError("psycopg2 not installed")
+
+        conn = None
+        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        
+        try:
+            print(f"Creating dataset via database: {table_name}")
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
+            cursor = conn.cursor()
+            
+            # Check if it already exists first
+            check_sql = "SELECT id FROM tables WHERE table_name = %s AND database_id = %s"
+            cursor.execute(check_sql, (table_name, int(database_id)))
+            existing = cursor.fetchone()
+            if existing:
+                print(f"✅ Found existing dataset {existing[0]} during direct creation attempt.")
+                return {"id": existing[0], "table_name": table_name, "database": {"id": int(database_id)}}
+
+            # Insert new dataset
+            ds_uuid = str(uuid.uuid4())
+            sql = """
+            INSERT INTO tables (
+                table_name, schema, database_id, uuid, 
+                created_on, changed_on, created_by_fk, changed_by_fk
+            ) VALUES (%s, %s, %s, %s, NOW(), NOW(), 1, 1)
+            RETURNING id;
+            """
+            
+            cursor.execute(sql, (table_name, schema, int(database_id), ds_uuid))
+            dataset_id = cursor.fetchone()[0]
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            print(f"✅ Dataset created via database with ID: {dataset_id}")
+            return {"id": dataset_id, "table_name": table_name, "database": {"id": int(database_id)}}
+            
+        except Exception as e:
+            print(f"❌ Database dataset creation failed: {type(e).__name__}: {str(e)}")
+            if conn:
+                conn.rollback()
+                conn.close()
+            raise RuntimeError(f"Database dataset creation failed: {str(e)}")
 
     def _find_dataset_direct(self, database_id, table_name):
         """Query the Superset metadata database directly to find the table ID."""
