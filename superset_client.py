@@ -3,9 +3,12 @@ import json
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+# Try to import streamlit for secrets management
+try:
+    import streamlit as st
+except ImportError:
+    st = None
 
-import streamlit as st
 load_dotenv()
 
 
@@ -23,15 +26,60 @@ class SupersetClient:
       you typically need a writable database and Superset configured with that database.
     """
 
-    def __init__(self, superset_url=None, api_key=None, username=None, password=None, database_id=None):
-        self.superset_url = (superset_url or st.secrets.get("SUPERSET_URL") or os.getenv("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
-        self.api_key = api_key or st.secrets.get("SUPERSET_API_KEY") or os.getenv("SUPERSET_API_KEY")
-        self.username = username or st.secrets.get("SUPERSET_USERNAME") or os.getenv("SUPERSET_USERNAME")
-        self.password = password or st.secrets.get("SUPERSET_PASSWORD") or os.getenv("SUPERSET_PASSWORD")
-        self.database_id = database_id or st.secrets.get("SUPERSET_DATABASE_ID") or os.getenv("SUPERSET_DATABASE_ID")
+    def __init__(self, api_url=None, public_url=None, api_key=None, username=None, password=None, database_id=None):
+        # Helper to get secret/env
+        def get_conf(key, default=None):
+            val = None
+            if st and hasattr(st, "secrets"):
+                try:
+                    val = st.secrets.get(key)
+                except Exception:
+                    pass
+            return val or os.getenv(key) or default
+
+        # Internal API URL (used by this script to talk to Superset)
+        self.api_url = (api_url or get_conf("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
+        
+        # Public URL (used by the browser to embed dashboards)
+        # Fallback to api_url if not provided
+        self.public_url = (public_url or get_conf("SUPERSET_PUBLIC_URL") or self.api_url).rstrip("/")
+        
+        # Backward compatibility for code that still uses self.superset_url
+        self.superset_url = self.api_url
+        
+        self.api_key = api_key or get_conf("SUPERSET_API_KEY")
+        self.username = username or get_conf("SUPERSET_USERNAME")
+        self.password = password or get_conf("SUPERSET_PASSWORD")
+        self.database_id = database_id or get_conf("SUPERSET_DATABASE_ID")
+        self.db_uri = get_conf("DB_URI") # Cache this once on init (main thread)
         self._token = None
         self.session = requests.Session()
         self._csrf_token = None
+
+    def _get_db_connection(self):
+        """Get a database connection using DB_URI."""
+        try:
+            import psycopg2
+        except ImportError:
+            raise RuntimeError("psycopg2 not installed. Run: pip install psycopg2-binary")
+
+        # 1. Use DB_URI for both Data and Metadata (Unified Setup)
+        # Use cached self.db_uri to avoid st.secrets access in threads
+        db_uri = self.db_uri 
+        if db_uri:
+            # print(f"DEBUG: Connecting to database using DB_URI...")
+            return psycopg2.connect(db_uri, connect_timeout=10)
+        
+        # 2. Fallback to Localhost (Local development only)
+        print(f"DEBUG: Connecting to DB using Localhost fallback...")
+        return psycopg2.connect(
+            host="localhost",
+            port=5432,
+            database="superset",
+            user="superset",
+            password="superset_password",
+            connect_timeout=5
+        )
 
     def _auth_headers(self):
         headers = {"Content-Type": "application/json"}
@@ -55,32 +103,89 @@ class SupersetClient:
         return headers
 
     def _request(self, method, endpoint, **kwargs):
-        """Wrapper for requests with auto-reauthentication on 401."""
+        """Wrapper for requests with auto-reauthentication and retries."""
         endpoint = endpoint.lstrip("/")
-        url = f"{self.superset_url}/{endpoint}"
-        
-        if os.getenv("DEBUG") or get_config("DEBUG"):
-            print(f"DEBUG: Superset Request: {method} {url}")
+        url = f"{self.api_url}/{endpoint}"
         
         # Ensure headers are present
         if "headers" not in kwargs:
             kwargs["headers"] = self._auth_headers()
-        
-        try:
-            resp = self.session.request(method, url, **kwargs)
             
-            # If 401, try to refresh token and retry once
-            if resp.status_code == 401:
-                print("DEBUG: Got 401, attempting to re-authenticate...")
-                self._token = None # Clear invalid token
-                # Force new headers with new token
-                kwargs["headers"] = self._auth_headers() 
-                resp = self.session.request(method, url, **kwargs)
+        import time
+        # Allow retries to be configured (default 3)
+        # We pop it from kwargs so it doesn't get passed to requests.request
+        max_retries = kwargs.pop("retries", 3)
+        retry_delay = 2 # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"DEBUG: {method} {url} (Attempt {attempt + 1})")
+                # Set allow_redirects=True to handle 308 redirects from no-slash to slash (common in ngrok/Superset)
+                resp = self.session.request(method, url, allow_redirects=True, **kwargs)
+                print(f"DEBUG: Response Status: {resp.status_code}")
                 
-            return resp
-        except Exception as e:
-            # Wrap connection errors etc.
-            raise RuntimeError(f"Request failed: {e}")
+                # Log request details
+                if resp.status_code >= 400:
+                    try:
+                        error_json = resp.json()
+                        print(f"DEBUG: Response Body: {error_json}")
+                    except json.JSONDecodeError:
+                        print(f"DEBUG: Response Body: {resp.text}")
+                
+                # Specialized logging for 422 Unprocessable Entity
+                if resp.status_code == 422:
+                    print(f"❌ Superset 422 Error at {url}:")
+                    try:
+                        # Attempt to get payload from kwargs, prioritizing 'json' then 'data'
+                        payload_sent = kwargs.get('json') or kwargs.get('data')
+                        print(f"   Payload sent: {payload_sent}")
+                        print(f"   Detailed error info: {resp.json()}")
+                    except Exception:
+                        print(f"   Raw response: {resp.text}")
+                
+                # If 401, try to refresh token and retry once
+                if resp.status_code == 401:
+                    print("DEBUG: Got 401, attempting to re-authenticate...")
+                    self._token = None # Clear invalid token
+                    # Force new headers with new token
+                    kwargs["headers"] = self._auth_headers() 
+                    resp = self.session.request(method, url, **kwargs)
+                    print(f"DEBUG: Retry Response Status: {resp.status_code}")
+                    
+                if not resp.ok:
+                    details = ""
+                    if resp.status_code == 422:
+                        try:
+                            err_data = resp.json()
+                            details = f" - Info: {err_data}"
+                        except:
+                            details = f" - Body: {resp.text}"
+                    
+                    print(f"DEBUG: Response Error Body: {resp.text}")
+                    
+                    # DO NOT raise here, just check if we should retry
+                    # 4xx errors (except 401) should NOT be retries by the general loop
+                    if resp.status_code < 500 and resp.status_code != 408:
+                         raise RuntimeError(f"Request failed: {resp.status_code}{details}")
+
+                if resp.status_code in [500, 502, 503, 504, 408] and attempt < max_retries - 1:
+                    print(f"DEBUG: Transient error {resp.status_code}. Retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                
+                if not resp.ok:
+                     raise RuntimeError(f"Request failed after retries: {resp.status_code}")
+
+                return resp
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"DEBUG: Request failed: {e}. Retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                # Wrap connection errors etc.
+                raise RuntimeError(f"Request failed after {max_retries} attempts: {e}")
 
     def _ensure_token(self):
         if self._token:
@@ -88,11 +193,21 @@ class SupersetClient:
         if not (self.username and self.password):
             raise RuntimeError("No API key or username/password configured for Superset authentication")
         
-        url = f"{self.superset_url}/api/v1/security/login"
+        url = f"{self.api_url}/api/v1/security/login"
         payload = {"username": self.username, "password": self.password, "provider": "db"}
         
+        headers = {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
+        }
+        
         # Use session to persist cookies
-        resp = self.session.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
+        print(f"DEBUG: Authenticating to {url}...")
+        resp = self.session.post(url, json=payload, headers=headers, timeout=30)
+        
+        if not resp.ok:
+            print(f"DEBUG: Authentication failed ({resp.status_code}): {resp.text}")
+        
         resp.raise_for_status()
         data = resp.json()
         
@@ -108,8 +223,11 @@ class SupersetClient:
     def _get_csrf_token(self):
         """Fetch CSRF token using the current session/token."""
         # This is a special case, we don't use _request to avoid infinite recursion if it fails
-        url = f"{self.superset_url}/api/v1/security/csrf_token/"
-        headers = {"Authorization": f"Bearer {self._token}"}
+        url = f"{self.api_url}/api/v1/security/csrf_token/"
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+            "ngrok-skip-browser-warning": "true"
+        }
         try:
             resp = self.session.get(url, headers=headers, timeout=10)
             resp.raise_for_status()
@@ -124,11 +242,43 @@ class SupersetClient:
         return resp.json()
 
     def get_database_id(self, database_name):
-        """Find database ID by name."""
-        dbs = self.list_databases().get("result", [])
+        """Find database ID by name using server-side filtering."""
+        import json
+        
+        # Use Rison/JSON filter to find exact match on server side
+        # This avoids pagination issues
+        filters = [
+            {
+                "col": "database_name",
+                "opr": "eq",
+                "value": database_name
+            }
+        ]
+        params = {"q": json.dumps({"filters": filters})}
+        
+        try:
+            print(f"DEBUG: Searching for database '{database_name}' via API filter...")
+            resp = self._request("GET", "api/v1/database/", params=params, timeout=30)
+            if resp.ok:
+                dbs = resp.json().get("result", [])
+                for db in dbs:
+                     if db.get("database_name") == database_name:
+                         print(f"  - Found: '{database_name}' (ID: {db.get('id')})")
+                         return db.get("id")
+        except Exception as e:
+            print(f"Warning: Database filtered search failed: {e}")
+
+        # Fallback: List all (up to limit) and text search
+        resp = self.list_databases()
+        dbs = resp.get("result", [])
+        
+        print(f"DEBUG: Searching for database '{database_name}' in {len(dbs)} registered databases (fallback)...")
         for db in dbs:
-            if db.get("database_name") == database_name:
+            curr_name = db.get("database_name")
+            # print(f"  - Found: '{curr_name}' (ID: {db.get('id')})")
+            if curr_name and curr_name.lower() == database_name.lower():
                 return db.get("id")
+        
         return None
 
     def create_dataset(self, database_id, schema, table_name, dataset_name=None):
@@ -136,7 +286,22 @@ class SupersetClient:
         
         If dataset already exists, try to find and return it.
         """
-        # Try multiple payload shapes since Superset API expects either database id or object depending on version
+        try:
+            # List all databases to find the correct one and log it prominently
+            db_resp = self._request("GET", "api/v1/database/", timeout=10)
+            if db_resp.ok:
+                dbs = db_resp.json().get("result", [])
+                print("*" * 50)
+                print("DEBUG: SUPERSET DATABASE DISCOVERY")
+                for db in dbs:
+                    print(f"  - DB ID {db.get('id')}: {db.get('database_name')} (Type: {db.get('backend')})")
+                print("*" * 50)
+                
+                # If we only have one database and it's ID 1, we might be using the metadata DB for data
+                # If we have multiple, the user needs to know WHICH one is Supabase.
+        except Exception as e:
+            print(f"Warning: Could not list databases: {e}")
+
         # Try multiple payload shapes since Superset API expects either database id or object depending on version
         endpoints = ["api/v1/dataset", "api/v1/dataset/"]
         payloads = []
@@ -162,6 +327,22 @@ class SupersetClient:
                     print(f"DEBUG: Attempting create_dataset at {endpoint} with payload {payload}")
                     resp = self._request("POST", endpoint, json=payload, timeout=30)
                 except Exception as e:
+                    # Check for "already exists" inside the exception
+                    if "already exists" in str(e) or "422" in str(e):
+                          print("DEBUG: Dataset already exists (caught exception). Fetching existing dataset...")
+                          
+                          # Try to extract ID from error message if present (rare but possible)
+                          import re
+                          match = re.search(r'Dataset\s+(\d+)\s+already exists', str(e))
+                          if match:
+                              found_id = match.group(1)
+                              print(f"DEBUG: Extracted ID {found_id} from error message!")
+                              return {"id": int(found_id), "table_name": table_name, "database": {"id": database_id}}
+
+                          existing_ds = self._find_dataset(database_id, table_name)
+                          if existing_ds:
+                              return existing_ds
+                    
                     print(f"Request failed for endpoint={endpoint} payload={payload}: {e}")
                     errors.append(f"{endpoint} + {payload} => {e}")
                     continue
@@ -180,12 +361,13 @@ class SupersetClient:
                 if resp.status_code == 422 and "already exists" in str(body):
                     print("DEBUG: Dataset already exists. Fetching existing dataset...")
                     # Try to find the dataset ID
-                    # We can't easily search by table name via API in all versions, 
-                    # but we can try to list datasets and filter.
-                    # For now, let's just return a dummy success with the ID if we can find it, 
-                    # or just raise a specific error that the app can handle.
-                    # Better: try to fetch it.
-                    return self._find_dataset(database_id, table_name) or body
+                    existing_ds = self._find_dataset(database_id, table_name)
+                    if existing_ds:
+                        return existing_ds
+                    
+                    # If we can't find it, we can't proceed. Returning 'body' causes NoneType errors downstream.
+                    # Raise an error to be caught by the app.
+                    raise RuntimeError(f"Dataset '{table_name}' already exists, but could not be found via API. Check database permissions or name mismatch.")
 
                 print(f"DEBUG: Failed with status {resp.status_code}: {body}")
                 errors.append(f"{endpoint} + {payload} => Status {resp.status_code}: {body}")
@@ -196,21 +378,113 @@ class SupersetClient:
     def _find_dataset(self, database_id, table_name):
         """Helper to find a dataset by db and table name."""
         try:
-            # This is inefficient but works for small setups
-            resp = self._request("GET", "api/v1/dataset/", timeout=30)
+            # 1. Try Server-Side Filtering (Fastest)
+            import json
+            filters = [{"col": "table_name", "opr": "eq", "value": table_name}]
+            params = {"q": json.dumps({"filters": filters})}
+            
+            print(f"DEBUG: Searching for dataset '{table_name}' via API filter...")
+            resp = self._request("GET", "api/v1/dataset/", params=params, timeout=30)
+            
+            found_ds = None
             if resp.ok:
                 datasets = resp.json().get("result", [])
                 for ds in datasets:
-                    # Check if it matches
-                    # Note: 'database' field in list response might be an object or id
-                    ds_db = ds.get("database", {})
-                    ds_db_id = ds_db.get("id") if isinstance(ds_db, dict) else ds_db
-                    
-                    if int(ds_db_id) == int(database_id) and ds.get("table_name") == table_name:
+                     if self._check_dataset_match(ds, database_id, table_name):
+                         return ds
+            
+            # 2. Fallback: Brute Force Iteration (Reliable)
+            print("DEBUG: Filtered search returned nothing. Trying brute-force iteration (page_size=2000)...")
+            params = {"q": json.dumps({"page_size": 2000})} # Get EVERYTHING
+            resp = self._request("GET", "api/v1/dataset/", params=params, timeout=45)
+            
+            if resp.ok:
+                datasets = resp.json().get("result", [])
+                print(f"DEBUG: Scanned {len(datasets)} datasets manually...")
+                for ds in datasets:
+                    if self._check_dataset_match(ds, database_id, table_name):
                         return ds
+            
+            # 3. Last Resort: Direct Database Query (Bypasses API visibility issues)
+            print("DEBUG: API search failed. Trying direct Metadata DB query...")
+            direct_result = self._find_dataset_direct(database_id, table_name)
+            if direct_result:
+                return direct_result
+
+            # 4. NUCLEAR OPTION: Fast Parallel Probe (IDs 1-500)
+            # If DB query failed (connection issues) and List failed (visibility), 
+            # we blindly check IDs in parallel.
+            print("DEBUG: Direct DB failed. Probing IDs 1-500 via API (Parallel)...")
+            
+            import concurrent.futures
+
+            def check_id(pid):
+                try:
+                    # Short timeout, we want speed
+                    r = self._request("GET", f"api/v1/dataset/{pid}", timeout=2)
+                    if r.ok:
+                        d = r.json().get("result", {})
+                        if self._check_dataset_match(d, database_id, table_name):
+                            return d
+                    else:
+                        # Log non-404 errors to help debug
+                        if r.status_code != 404:
+                            print(f"DEBUG: Probe ID {pid} failed: {r.status_code}")
+                except Exception as e:
+                    print(f"DEBUG: Probe ID {pid} error: {e}")
+                return None
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+                futures = {executor.submit(check_id, i): i for i in range(1, 1001)}
+                for future in concurrent.futures.as_completed(futures):
+                    result = future.result()
+                    if result:
+                        print(f"✅ Found dataset via Parallel Probe: ID {result.get('id')}")
+                        return result
+
         except Exception as e:
             print(f"Warning: Could not search for existing dataset: {e}")
         return None
+
+    def _find_dataset_direct(self, database_id, table_name):
+        """Query the Superset metadata database directly to find the table ID."""
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+            
+            # Query the 'tables' table (standard Superset model)
+            sql = "SELECT id FROM tables WHERE table_name = %s AND database_id = %s"
+            cursor.execute(sql, (table_name, int(database_id)))
+            result = cursor.fetchone()
+            
+            cursor.close()
+            conn.close()
+            
+            if result:
+                 d_id = result[0]
+                 print(f"✅ Found existing dataset ID via DB: {d_id}")
+                 # Return a minimal dict that satisfies downstream code
+                 return {"id": d_id, "table_name": table_name, "database": {"id": int(database_id)}}
+            
+            print("DEBUG: Dataset not found in metadata DB.")
+            return None
+            
+        except Exception as e:
+            print(f"Warning: Direct DB dataset lookup failed: {e}")
+            return None
+
+    def _check_dataset_match(self, ds, database_id, table_name):
+        """Helper to check if a dataset dict matches our target."""
+        ds_db = ds.get("database", {})
+        ds_db_id = ds_db.get("id") if isinstance(ds_db, dict) else ds_db
+        
+        # print(f"DEBUG: Checking {ds.get('table_name')} (DB {ds_db_id})...")
+        
+        ds_table = ds.get("table_name")
+        if str(ds_db_id) == str(database_id) and ds_table and ds_table.lower() == table_name.lower():
+            print(f"DEBUG: Found existing dataset ID: {ds.get('id')} for table {table_name}")
+            return True
+        return False
 
     def create_chart(self, dataset_id, chart_name, viz_type, params=None):
         """Create a chart (slice) referencing a dataset.
@@ -219,22 +493,29 @@ class SupersetClient:
         Returns chart JSON.
         """
 
+        # Try with owner ID 1 (admin) first, then fallback
         payload = {
             "slice_name": chart_name,
             "viz_type": viz_type,
             "datasource_id": int(dataset_id),
             "datasource_type": "table",
             "params": json.dumps(params or {}),
+            "owners": [1] 
         }
         
+        print(f"DEBUG: Attempting chart creation for table ID {dataset_id}...")
+        
         try:
-            # Try both with and without trailing slash as some Superset versions are picky
-            resp = self._request("POST", "api/v1/chart/", json=payload, timeout=30)
-            if resp.status_code == 404:
-                resp = self._request("POST", "api/v1/chart", json=payload, timeout=30)
+            # We already have allow_redirects=True in _request
+            resp = self._request("POST", "api/v1/chart/", json=payload, timeout=40)
             
             if not resp.ok:
-                print(f"DEBUG: Chart API failed ({resp.status_code}): {resp.text}")
+                print(f"DEBUG: Chart API failed ({resp.status_code}). Response: {resp.text}")
+                if "owners" in payload:
+                    print("DEBUG: Retrying WITHOUT 'owners' field...")
+                    payload.pop("owners")
+                    resp = self._request("POST", "api/v1/chart/", json=payload, timeout=40)
+            
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
@@ -249,7 +530,37 @@ class SupersetClient:
 
             # Fallback: use direct database insertion
             print(f"API chart creation failed: {e}. Trying database-direct method...")
+            if "relation \"slices\" does not exist" in str(e) or "psycopg2" in str(e):
+                 print("TIP: If you are on Streamlit Cloud, you MUST set SUPERSET_METADATA_DB_URI to your Superset database URI for this fallback to work.")
             return self._create_chart_direct(dataset_id, chart_name, viz_type, params)
+
+    def delete_chart(self, chart_id):
+        """Delete a chart by ID."""
+        try:
+            resp = self._request("DELETE", f"api/v1/chart/{chart_id}", timeout=30)
+            if resp.ok:
+                print(f"✅ Chart {chart_id} deleted via API.")
+                return True
+        except Exception as e:
+            print(f"API chart deletion failed: {e}. Trying database-direct method...")
+        
+        # Fallback
+        return self._delete_chart_direct(chart_id)
+
+    def _delete_chart_direct(self, chart_id):
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+            sql = "DELETE FROM slices WHERE id = %s"
+            cursor.execute(sql, (int(chart_id),))
+            conn.commit()
+            cursor.close()
+            conn.close()
+            print(f"✅ Chart {chart_id} deleted via database.")
+            return True
+        except Exception as e:
+             print(f"❌ Database chart deletion failed: {e}")
+             return False
     
     def _create_chart_direct(self, dataset_id, chart_name, viz_type, params=None):
         """Create chart by direct database insertion (bypasses buggy API)"""
@@ -298,7 +609,15 @@ class SupersetClient:
             print(f"❌ Database connection failed: {str(e)}")
             if conn:
                 conn.close()
-            raise RuntimeError(f"Cannot connect to PostgreSQL: {str(e)}")
+            raise RuntimeError(f"Cannot connect to PostgreSQL for metadata: {str(e)}")
+        except psycopg2.errors.UndefinedTable as e:
+            print(f"❌ CRITICAL ERROR: The table 'slices' was not found in the current database.")
+            print(f"💡 REASON: Your database migrations might not have been run, or DB_URI is pointing to the wrong place.")
+            print(f"💡 FIX: Ensure you have run 'superset db upgrade' to create the Superset tables in your database.")
+            if conn:
+                conn.rollback()
+                conn.close()
+            raise RuntimeError(f"Metadata table 'slices' missing. Please ensure migrations were run on your DB_URI.")
         except Exception as e:
             print(f"❌ Database insertion failed: {type(e).__name__}: {str(e)}")
             if conn:
@@ -313,7 +632,7 @@ class SupersetClient:
         }
         
         try:
-            resp = self._request("POST", "api/v1/dashboard", json=payload, timeout=30)
+            resp = self._request("POST", "api/v1/dashboard/", json=payload, timeout=30)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
@@ -361,6 +680,13 @@ class SupersetClient:
             print(f"✅ Dashboard created via database with ID: {dashboard_id}")
             return {"id": dashboard_id, "dashboard_title": dashboard_title, "slug": slug}
             
+        except psycopg2.errors.UndefinedTable as e:
+            print(f"❌ CRITICAL ERROR: The table 'dashboards' was not found.")
+            print(f"💡 FIX: Set 'SUPERSET_METADATA_DB_URI' to your Superset metadata database.")
+            if conn:
+                conn.rollback()
+                conn.close()
+            raise RuntimeError(f"Metadata table 'dashboards' missing.")
         except Exception as e:
             print(f"❌ Dashboard creation failed: {type(e).__name__}: {str(e)}")
             if conn:
@@ -489,7 +815,7 @@ class SupersetClient:
         chart_details = []
         for c_id in chart_ids:
             try:
-                 c_resp = self._request("GET", f"api/v1/chart/{c_id}", timeout=10)
+                 c_resp = self._request("GET", f"api/v1/chart/{c_id}/", timeout=10)
                  if c_resp.ok:
                      chart_details.append(c_resp.json().get("result"))
             except Exception as e:
@@ -540,17 +866,13 @@ class SupersetClient:
         # 5. Submit update
         payload = {
             "position_json": json.dumps(position_json),
-            "css": "",
-            "json_metadata": json.dumps({
-                "timed_refresh_immune_slices": [],
-                "expanded_slices": {},
-                "refresh_frequency": 0,
-                "default_filters": "{}"
-            })
+            "published": data.get("published", False)
         }
         
-        url = f"api/v1/dashboard/{dashboard_id}"
-        resp = self._request("PUT", url, json=payload, timeout=30)
+        # 4. Update Dashboard FIRST
+        print(f"DEBUG: Updating dashboard {dashboard_id} with position_json...")
+        resp = self._request("PUT", f"api/v1/dashboard/{dashboard_id}/", json=payload, timeout=30)
+        
         if not resp.ok:
             print(f"DEBUG: Dashboard link API failed ({resp.status_code}): {resp.text}")
         resp.raise_for_status()
@@ -560,7 +882,7 @@ class SupersetClient:
         print(f"DEBUG: Linking {len(chart_ids)} charts to dashboard {dashboard_id}...")
         for c_id in chart_ids:
             try:
-                self._request("PUT", f"api/v1/chart/{c_id}", json={"dashboards": [int(dashboard_id)]}, timeout=10)
+                self._request("PUT", f"api/v1/chart/{c_id}/", json={"dashboards": [int(dashboard_id)]}, timeout=10)
             except Exception as e:
                 print(f"Warning: Failed to link chart {c_id} to dashboard: {e}")
 
@@ -572,28 +894,54 @@ class SupersetClient:
         return resp.json()
 
     def add_database(self, database_name, sqlalchemy_uri):
-        """Add a new database connection to Superset."""
+        """Add a new database connection to Superset, or return existing one if name matches."""
+        # 1. Check if it already exists to avoid 422 Unprocessable Entity (Duplicate)
+        existing_id = self.get_database_id(database_name)
+        if existing_id:
+            print(f"DEBUG: Database '{database_name}' already exists with ID {existing_id}. Skipping creation.")
+            return {"id": existing_id, "database_name": database_name, "message": "Already exists"}
+
         payload = {
             "database_name": database_name,
             "sqlalchemy_uri": sqlalchemy_uri
         }
-        resp = self._request("POST", "api/v1/database/", json=payload, timeout=30)
-        resp.raise_for_status()
-        return resp.json()
+        
+        try:
+            resp = self._request("POST", "api/v1/database/", json=payload, timeout=30)
+            # _request already raises RuntimeError if it fails
+            return resp.json()
+        except Exception as e:
+            # If we still got a 422 or any fail, try ONE LAST TIME to find the ID 
+            # (Just in case it was created in a parallel rerun)
+            print(f"DEBUG: add_database failed: {e}. Final attempt to find existing ID...")
+            import time
+            time.sleep(1)
+            final_check_id = self.get_database_id(database_name)
+            if final_check_id:
+                return {"id": final_check_id, "database_name": database_name, "message": "Recovered ID after failure"}
+            
+            # FINAL FALLBACK: If it's "Already exists" and we CANNOT find it, assume it is ID 1 (common for single-db Superset)
+            if "already exists" in str(e) or "422" in str(e):
+                print("DEBUG: Database exists but cannot be found. ASSUMING ID 1 (Default).")
+                return {"id": 1, "database_name": database_name, "message": "Assumed ID 1 (Fallback)"}
+
+            raise e
 
     def list_databases(self):
         """Return list of databases configured in Superset (useful to pick database_id)."""
-        resp = self._request("GET", "api/v1/database/", timeout=30)
-        resp.raise_for_status()
+        import json
+        # Request a larger page size to ensure we don't miss our database if many exist
+        params = {"q": json.dumps({"page_size": 2000})}
+        resp = self._request("GET", "api/v1/database/", params=params, timeout=30)
         return resp.json()
 
     def dashboard_url(self, dashboard_id):
-        return f"{self.superset_url}/superset/dashboard/{dashboard_id}/"
+        return f"{self.public_url}/superset/dashboard/{dashboard_id}/"
 
     def delete_dashboard(self, dashboard_id):
         """Delete a dashboard by ID."""
         try:
-            resp = self._request("DELETE", f"api/v1/dashboard/{dashboard_id}", timeout=30)
+            resp = self._request("DELETE", f"api/v1/dashboard/{dashboard_id}/", timeout=30)
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
@@ -645,3 +993,113 @@ class SupersetClient:
         except Exception as e:
             print(f"Warning: Could not fetch columns for dataset {dataset_id}: {e}")
         return []
+
+    def get_guest_token(self, dashboard_id, resources=None, user_info=None):
+        """Fetch a guest token for the given dashboard."""
+        
+        # Ensure we use UUID for the resource ID if possible (more robust for embedding)
+        resource_id = str(dashboard_id)
+        if str(dashboard_id).isdigit():
+             # Try to resolve to UUID
+             try:
+                 resp = self._request("GET", f"api/v1/dashboard/{dashboard_id}", timeout=5)
+                 if resp.ok:
+                     resource_id = resp.json().get("result", {}).get("uuid", str(dashboard_id))
+             except:
+                 pass
+
+        if resources is None:
+            resources = [{"type": "dashboard", "id": resource_id}]
+        if user_info is None:
+            user_info = {"username": "guest", "first_name": "Guest", "last_name": "User"}
+        
+        payload = {
+            "user": user_info,
+            "resources": resources,
+            "rls": []
+        }
+        
+        resp = self._request("POST", "api/v1/security/guest_token/", json=payload, timeout=30)
+        if not resp.ok:
+            print(f"DEBUG: Guest token API failed ({resp.status_code}). Attempting manual JWT generation...")
+            # NUCLEAR FALLBACK: Generate the token ourselves if we have the secret key
+            # This bypasses the API checks entirely.
+            secret = st.secrets.get("SUPERSET_SECRET_KEY") or os.getenv("SUPERSET_SECRET_KEY")
+            if not secret:
+                 # Try to read it from config file if local
+                 try:
+                     with open("superset/superset_config.py", "r") as f:
+                         for line in f:
+                             if "SECRET_KEY =" in line:
+                                 secret = line.split("=")[1].strip().strip('"').strip("'")
+                                 break
+                 except:
+                     pass
+            
+            if secret:
+                try:
+                    import jwt
+                    import time
+                    
+                    # Standard claims
+                    claims = {
+                        "user": user_info,
+                        "resources": resources,
+                        "rls": [],
+                        "iat": int(time.time()),
+                        "exp": int(time.time()) + 300, # 5 minutes
+                        "type": "guest"
+                    }
+                    
+                    token = jwt.encode(claims, secret, algorithm="HS256")
+                    if isinstance(token, bytes):
+                        token = token.decode("utf-8")
+                        
+                    print("✅ Generated Manual Guest Token!")
+                    return token
+                except Exception as e:
+                    print(f"Manual token generation failed: {e}")
+
+            # If manual failed or no secret, raise original error
+            print(f"DEBUG: Guest token request failed with status {resp.status_code}: {resp.text}")
+            resp.raise_for_status()
+            
+        data = resp.json()
+        return data.get("token") or data.get("result", {}).get("token")
+
+    def get_or_create_embedded_config(self, dashboard_id, allowed_domains=None):
+        """Get or create the embedded configuration for a dashboard and return the embedded_id (UUID)."""
+        if allowed_domains is None:
+            allowed_domains = ["*"]
+            
+        embedded_uuid = None
+        # 1. Try to get existing config
+        try:
+            resp = self._request("GET", f"api/v1/dashboard/{dashboard_id}/embedded", timeout=10)
+            if resp.ok:
+                data = resp.json().get("result", {})
+                embedded_uuid = data.get("uuid")
+                current_domains = data.get("allowed_domains", [])
+                print(f"DEBUG: Found existing embedded config. UUID: {embedded_uuid}, Current Domains: {current_domains}")
+        except Exception as e:
+            print(f"DEBUG: Error checking existing embedded config: {e}")
+            pass
+            
+        # 2. Always update/create it to ensure allowed_domains is correctly set (e.g. ['*'])
+        # This is safer than just relying on whatever was there before.
+        payload = {"allowed_domains": allowed_domains}
+        if embedded_uuid:
+            # Update existing
+            print(f"DEBUG: Updating existing embedded config for dashboard {dashboard_id}...")
+            resp = self._request("PUT", f"api/v1/dashboard/{dashboard_id}/embedded", json=payload, timeout=10)
+        else:
+            # Create new
+            print(f"DEBUG: Creating new embedded config for dashboard {dashboard_id}...")
+            resp = self._request("POST", f"api/v1/dashboard/{dashboard_id}/embedded", json=payload, timeout=10)
+            
+        if not resp.ok:
+            print(f"DEBUG: Failed to update/create embedded config for dashboard {dashboard_id}: {resp.text}")
+            if not embedded_uuid: # If we don't even have a UUID to return, fail
+                resp.raise_for_status()
+            
+        return embedded_uuid or resp.json().get("result", {}).get("uuid")

@@ -1,53 +1,74 @@
 import streamlit as st
+import uuid
 DEBUG = False  # Set to True to enable debug prints
 import streamlit.components.v1 as components
 import re
 import time
 import os
-
+st.set_page_config(
+        page_title="BI Chatbot",  
+        layout="centered"
+    )
 # --- Helper for Typewriter Effect ---
 def stream_data(text, delay=0.02):
     for word in text.split(" "):
         yield word + " "
         time.sleep(delay)
 import json
+import concurrent.futures
 import difflib
 import pandas as pd
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 import requests
-from huggingface_hub import InferenceClient
-# Load environment variables
-load_dotenv()
-
-# HuggingFace configuration
-HF_TOKEN = st.secrets.get("HUGGINGFACE_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
-LLAMA_MODEL_ID = st.secrets.get("LLAMA_MODEL_ID") or os.getenv("LLAMA_MODEL_ID", "meta-llama/Meta-Llama-3-8B-Instruct")
-client = InferenceClient(model=LLAMA_MODEL_ID, token=HF_TOKEN)
+from ai_manager import get_llama_suggestions, handle_chat_prompt
 
 from superset_client import SupersetClient
 
-# Database connection string from environment (fallback to local if not set)
-DB_URI = st.secrets.get("DB_URI") or os.getenv("DB_URI", "postgresql://superset:superset_password@localhost:5432/superset")
-# URI for Superset container to reach the DB container (replace localhost with service name 'db' if applicable)
-DOCKER_DB_URI = DB_URI.replace("localhost", "db")
+# Database connection string
+# Prioritize st.secrets (Cloud), fallback to os.getenv (Local, or .env), fallback to default
+DB_URI = st.secrets.get("DB_URI") or os.getenv("DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+
+# URI for Superset container to reach the DB container (replace localhost with service name 'db')
+# If we are tunneling, DOCKER_DB_URI might not be relevant for this client script, 
+# but for internal container talk (if this script ran in container). 
+# For now, keep the logic but base it on the default if not provided.
+if "localhost" in DB_URI:
+    DOCKER_DB_URI = DB_URI.replace("localhost", "db")
+else:
+    DOCKER_DB_URI = DB_URI # Use as-is if external
 
 # Initialize Superset Client
 @st.cache_resource
-def get_superset_client():
-    return SupersetClient()
+def get_superset_client(version="1.0.2"): # Bump version to force cache clear
+    # Internal API URL (Bot -> Superset)
+    api_url = st.secrets.get("SUPERSET_URL") or os.getenv("SUPERSET_URL") or "http://localhost:8088"
+    # Public URL (Browser -> Superset)
+    public_url = st.secrets.get("SUPERSET_PUBLIC_URL") or os.getenv("SUPERSET_PUBLIC_URL")
+    
+    return SupersetClient(api_url=api_url, public_url=public_url)
 
 try:
     sup = get_superset_client()
+    # SECONDARY CHECK: If for some reason cache persists old class definition
+    if not hasattr(sup, "get_or_create_embedded_config"):
+        st.cache_resource.clear()
+        sup = get_superset_client()
 except Exception as e:
     st.error(f"Failed to initialize Superset Client: {e}")
     st.stop()
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_cached_database_id(db_name):
+    """Cache the database ID lookup to avoid repeated API calls on startup."""
+    return sup.get_database_id(db_name)
 
 def render_fullscreen_iframe(url, height=800):
     """Render an iframe with a custom Full Screen toggle button."""
     
     # If a public URL is configured (e.g. via ngrok), replace the internal URL domain
     # User requested specific public URL:
+    # Prioritize st.secrets (Cloud), fallback to os.getenv (Local)
     public_url_base = st.secrets.get("SUPERSET_PUBLIC_URL") or os.getenv("SUPERSET_PUBLIC_URL", "https://nonhallucinatory-meetly-sharika.ngrok-free.dev")
     if public_url_base:
         # Assuming 'url' starts with the internal http://localhost:8088 or similar
@@ -126,125 +147,95 @@ def render_fullscreen_iframe(url, height=800):
     </html>
     """
     components.html(html_code, height=height, scrolling=False)
+ 
+def render_superset_embedded(dashboard_id, height=800):
+    """Render a Superset dashboard using Direct Iframe (Fastest)."""
+    try:
+        # Optimization: We use Public Access, so we skip the expensive Guest Token/Embedded SDK calls.
+        # This saves 2-3 API roundtrips (approx 5-10 seconds).
+        
+        # 1. Construct Public Dashboard URL
+        # e.g. .../superset/dashboard/{id}/?standalone=true
+        dashboard_url = f"{sup.public_url.rstrip('/')}/superset/dashboard/{dashboard_id}/?standalone=true"
+        
+        if DEBUG:
+            print(f"DEBUG: Rendering dashboard directly: {dashboard_url}")
+        
+        # 2. Simple Iframe
+        components.iframe(dashboard_url, height=height, scrolling=True)
+        
+    except Exception as e:
+        st.error(f"Failed to load dashboard: {e}")
+        # Fallback
+        url = sup.dashboard_url(dashboard_id)
+        render_fullscreen_iframe(url, height=height)
+ 
+def scroll_to_top():
+    """Inject Javascript to scroll the page to the top robustly."""
+    components.html(
+        """
+        <script>
+            // Try to find the main scrollable container in Streamlit
+            function doScroll() {
+                var mainSections = window.parent.document.querySelectorAll('section.main');
+                if (mainSections.length > 0) {
+                    mainSections.forEach(s => s.scrollTo({top: 0, behavior: 'auto'}));
+                } else {
+                    window.parent.scrollTo({top: 0, behavior: 'auto'});
+                }
+            }
+            // Execute immediately and then once more after a short delay
+            doScroll();
+            setTimeout(doScroll, 100);
+            setTimeout(doScroll, 300);
+        </script>
+        """,
+        height=0,
+    )
 
 import time
 
-def get_llama_suggestions(df, table_name, retries=3):
-    """Ask Llama 3 for a list of charts based on the dataframe columns using HuggingFace Inference API."""
-    if not HF_TOKEN:
-        st.warning("HuggingFace token not set. Llama suggestions disabled.")
-        return []
-    # Prepare column info
-    col_info = []
-    for col in df.columns:
-        dtype = str(df[col].dtype)
-        sample = str(df[col].head(3).tolist())
-        col_info.append(f"- {col} ({dtype}): e.g., {sample}")
-    col_text = "\n".join(col_info)
 
-    system_prompt = f"""
-You are an expert Data Analyst and Visualization Architect.
-I have a dataset '{table_name}' with the following columns:
-{col_text}
 
-Your goal is to suggest 4-6 diverse, meaningful, and accurate visualizations to summarize this data.
-- Analyze the column names and data types to understand the semantic meaning (e.g., time, category, money).
-- Suggest charts that reveal key insights, trends, or distributions.
-
-CRITICAL INSTRUCTIONS:
-1. Return ONLY a valid JSON array of objects.
-2. "viz_type" MUST be strictly one of: ["dist_bar", "pie", "line", "big_number_total"].
-   - Use "dist_bar" for categorical comparisons or time-series bars.
-   - Use "line" ONLY if there is a clear time series or ordered numerical x-axis.
-   - Use "pie" for part-to-whole comparisons (few categories).
-   - Use "big_number_total" for single aggregate metrics (e.g. Total Revenue).
-3. "agg_func" MUST be one of: ["SUM", "AVG", "COUNT", "MAX", "MIN"].
-4. Ensure "metric" is a numeric column (or "count").
-5. valid JSON only. No markdown formatting, no conversational text.
-
-Example JSON output structure:
-[
-  {{
-    "title": "Revenue by Region",
-    "viz_type": "dist_bar",
-    "metric": "sales_amount",
-    "group_by": "region",
-    "agg_func": "SUM"
-  }}
-]
-"""
-    for attempt in range(retries):
-        try:
-            # Use chat_completion for conversational Llama models
-            response = client.chat_completion(messages=[{"role": "user", "content": system_prompt}], max_tokens=500)
-            if hasattr(response, "choices"):
-                text = response.choices[0].message.content.strip()
-            else:
-                text = response.get("generated_text", "").strip()
-            
-            # Extract JSON array using regex
-            match = re.search(r'\[.*\]', text, re.DOTALL)
-            if match:
-                text = match.group(0)
-            
-            plans = json.loads(text)
-            validated_plans = []
-            valid_cols = set(df.columns)
-            
-            for p in plans:
-                # Sanitize strings
-                if str(p.get("group_by")).lower() in ["null", "none", ""]:
-                    p["group_by"] = None
-                
-                # Default title
-                if not p.get("title"):
-                    p["title"] = f"{p.get('viz_type', 'Chart')} of {p.get('metric', 'data')}"
-
-                # Validate Metric
-                if p.get("metric") != "count" and p.get("metric") not in valid_cols:
-                    p["metric"] = "count" # Fallback
-                
-                # Validate Group By
-                if p.get("group_by") and p.get("group_by") not in valid_cols:
-                    # Attempt to find a valid object/category column
-                    cat_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
-                    if cat_cols:
-                        p["group_by"] = cat_cols[0]
-                    else:
-                        p["group_by"] = None
-
-                validated_plans.append(p)
-
-            return validated_plans
-        except Exception as e:
-            if attempt == retries - 1:
-                st.error(f"Llama suggestion failed (Final Attempt): {e}")
-                st.error("Hugging Face API is experiencing issues. Please try again later.")
-                return []
-            else:
-                st.warning(f"Llama suggestion failed (Attempt {attempt+1}/{retries}). Retrying... Error: {e}")
-            time.sleep(2 ** attempt)
-    return []
 
 st.title("Superset AI Assistant")
 
 # Sidebar for File Upload
 with st.sidebar:
     st.header("Data Upload")
-    # Try to find the 'PostgreSQL' database automatically
-    db_id = sup.get_database_id("PostgreSQL")
+    # Try to find the 'Supabase_Cloud' database automatically (using session_state to avoid redundant API calls)
+    if "superset_db_id" not in st.session_state:
+        # Use cached lookup for speed (instant if previously found)
+        try:
+            db_id = get_cached_database_id("Supabase_Cloud")
+            if db_id:
+                st.session_state["superset_db_id"] = db_id
+        except Exception as e:
+            st.error(f"⚠️ Connection Error: Failed to connect to Superset API via Cloudflare.")
+            st.code(f"Details: {e}")
+            st.write("Retrying locally...")
+            # Do not crash, let the code fall through to the manual addition check
+        else:
+            with st.spinner("Connecting Superset to Database..."):
+                try:
+                    # Use DOCKER_DB_URI so Superset (in Docker) can reach the DB
+                    sup.add_database("Supabase_Cloud", DOCKER_DB_URI)
+                    st.success("Successfully added 'Supabase_Cloud' database to Superset!")
+                    time.sleep(1) # Wait a moment for consistency
+                    db_id = sup.get_database_id("Supabase_Cloud")
+                    if db_id:
+                        st.session_state["superset_db_id"] = db_id
+                except Exception as e:
+                    # If auto-connect fails, do not stop the app. Just warn and let fallback handling take over.
+                    print(f"Auto-connect warning: {e}")
+                    # Check if we can just assume it worked or is redundant
+                    if "already exists" in str(e):
+                         st.session_state["superset_db_id"] = 1
+                         # Success message will be shown below by the main check
+                    else:
+                         st.warning(f"Could not auto-connect database: {e}. Using manual selection below.")
     
-    # Auto-register if missing
-    if not db_id:
-        with st.spinner("Connecting Superset to Database..."):
-            try:
-                # Use DOCKER_DB_URI so Superset (in Docker) can reach the DB
-                sup.add_database("PostgreSQL", DOCKER_DB_URI)
-                st.success("Successfully added 'PostgreSQL' database to Superset!")
-                time.sleep(1) # Wait a moment for consistency
-                db_id = sup.get_database_id("PostgreSQL")
-            except Exception as e:
-                st.error(f"Failed to auto-connect database: {e}")
+    db_id = st.session_state.get("superset_db_id")
 
     if db_id:
         # Verify connection
@@ -262,8 +253,8 @@ with st.sidebar:
             choice = st.selectbox("Choose Superset database", options)
             db_id = int(choice.split(" - ")[0])
         else:
-            default_db = getattr(sup, "database_id", None) or 1
-            db_id = st.number_input("Superset database id", value=int(default_db), min_value=1)
+            # Auto-assign default if listing fails
+            db_id = getattr(sup, "database_id", None) or 1
     if db_id:
         st.session_state["superset_db_id"] = db_id
     uploaded_file = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
@@ -299,54 +290,263 @@ if 'upload_clicked' in locals() and upload_clicked and uploaded_file:
             st.session_state["current_dataframe"] = df  # Store dataframe for chat context
             with st.spinner("🤖 AI is analyzing your dataset..."):
                 plan = get_llama_suggestions(df, table_name)
-                st.session_state["dashboard_plan"] = plan
-                st.rerun()
+            st.session_state["dashboard_plan"] = plan
+            st.session_state["dashboard_creation_state"] = "REVIEW" # Set initial state
+            # Remove st.rerun() here - let Streamlit update the UI naturally on next script execution
+            # Since we just updated session_state, the next block will see it.
         except Exception as e:
             st.warning(f"Uploaded to DB but failed to create Superset dataset: {e}")
     except Exception as e:
         st.error(f"Failed to upload file: {e}")
+
+# Handle automatic scroll-to-top on state transitions
+if st.session_state.get("dashboard_creation_state") in ["BUILDING", "VERIFY"]:
+    scroll_to_top()
 
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 
-# --- Dashboard Generation UI (Moved to Top) ---
-if "dashboard_plan" in st.session_state:
-    with st.expander("📊 Review Dashboard Plan", expanded=True):
-        if st.session_state.get("waiting_for_dashboard_confirmation"):
-            st.header("✅ Dashboard Created!")
-            st.write("Please review the dashboard below.")
-            dash_url = st.session_state.get("created_dashboard_url")
-            render_fullscreen_iframe(dash_url, height=800)
-            
-            c1, c2 = st.columns(2)
-            if c1.button("Confirm & Keep"):
-                 # Add to chat history
-                 msg = f"I've created a new dashboard! You can view it here: [Dashboard Link]({dash_url})"
-                 st.session_state.messages.append({"role": "assistant", "content": msg, "chart_url": dash_url})
-                 
-                 del st.session_state["dashboard_plan"]
-                 del st.session_state["waiting_for_dashboard_confirmation"]
-                 st.success("Dashboard finalized!")
-                 st.rerun()
-            
-            if c2.button("Reject & Delete"):
-                 dash_id = st.session_state.get("created_dashboard_id")
-                 try:
-                    sup.delete_dashboard(dash_id)
-                    st.warning("Dashboard deleted. You can modify the plan below.")
-                 except Exception as e:
-                    st.error(f"Failed to delete dashboard: {e}")
-                 
-                 del st.session_state["waiting_for_dashboard_confirmation"]
-                 st.rerun()
 
-        else:
+
+
+
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        if message.get("dashboard_id"):
+            render_superset_embedded(message["dashboard_id"], height=600)
+        elif message.get("chart_url"):
+            render_fullscreen_iframe(message["chart_url"], height=600)
+        if message.get("show_data"):
+             df_view = st.session_state.get("current_dataframe")
+             if df_view is not None:
+                 st.dataframe(df_view)
+
+# --- Dashboard Generation UI (State Machine) ---
+# --- Dashboard Generation UI (State Machine) ---
+if "dashboard_plan" in st.session_state:
+    
+    # ---------------------------------------------------------
+    # STATE 1: SUCCESS (Dashboard Created) -> VERIFY
+    # ---------------------------------------------------------
+    current_state = st.session_state.get("dashboard_creation_state", "REVIEW")
+    
+    if current_state == "VERIFY":
+        st.header("✅ Dashboard Created!")
+        dash_url = st.session_state.get("created_dashboard_url")
+        dash_id = st.session_state.get("created_dashboard_id")
+        render_superset_embedded(dash_id, height=800)
+        
+        c1, c2 = st.columns(2)
+        if c1.button("Confirm & Keep"):
+            msg = f"I've created a new dashboard! You can view it here: [Dashboard Link]({dash_url})"
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": msg, 
+                "chart_url": dash_url,
+                "dashboard_id": dash_id
+            })
+            
+            # Cleanup State
+            del st.session_state["dashboard_plan"]
+            if "dashboard_creation_state" in st.session_state: del st.session_state["dashboard_creation_state"]
+            if "pending_dashboard_plan" in st.session_state: del st.session_state["pending_dashboard_plan"]
+            
+            st.success("Dashboard finalized!")
+            st.rerun()
+    
+        elif c2.button("Reject & Delete"):
+            # 1. Capture necessary IDs and clear state IMMEDIATELY for responsiveness
+            dash_id = st.session_state.get("created_dashboard_id")
+            chart_uuids = st.session_state.get("created_chart_uuids", [])
+            chart_map = st.session_state.get("chart_uuid_map", {})
+            chart_ids = [chart_map.get(uid) for uid in chart_uuids if chart_map.get(uid)]
+            
+            # Reset dashboard related session state immediately
+            for key in ["created_dashboard_id", "created_dashboard_url", "created_chart_uuids", "chart_uuid_map"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            
+            # 2. Perform deletions (Speed up with Parallelism)
+            with st.spinner("Deleting dashboard and charts..."):
+                # Delete Dashboard (Sequential, but usually fast)
+                try:
+                    if dash_id:
+                        sup.delete_dashboard(dash_id)
+                except Exception as e:
+                    st.error(f"Failed to delete dashboard: {e}")
+                
+                # Delete Charts in Parallel
+                if chart_ids:
+                    def delete_chart_task(c_id):
+                        try:
+                            sup.delete_chart(c_id)
+                            return True
+                        except Exception as e:
+                            print(f"Failed to delete chart {c_id}: {e}")
+                            return False
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                        results = list(executor.map(delete_chart_task, chart_ids))
+                    
+                    deleted_count = sum(1 for r in results if r)
+                    if deleted_count > 0:
+                        st.toast(f"Deleted {deleted_count} charts.")
+            
+            st.session_state["dashboard_creation_state"] = "REVIEW" # Go back to Review
+            st.info("Dashboard rejected. You can modify the plan below.")
+            st.rerun()
+
+    # ---------------------------------------------------------
+    # STATE 2: BUILDING (Processing - No Form Visible)
+    # ---------------------------------------------------------
+    elif current_state == "BUILDING":
+            status = st.status("Building Dashboard...", expanded=True)
+            try:
+                # Do NOT clean up temp state instantly. Wait for success or error.
+                
+                updated_plan = st.session_state.get("pending_dashboard_plan", [])
+                dataset_id = st.session_state.get("current_dataset_id")
+                db_id = st.session_state.get("superset_db_id")
+                table_name = st.session_state.get("current_table")
+                
+                if not dataset_id:
+                    try:
+                        ds = sup.create_dataset(database_id=db_id, schema="public", table_name=table_name)
+                        dataset_id = ds.get("id")
+                    except Exception as e:
+                        status.error(f"Could not ensure dataset: {e}")
+                        if "dashboard_creation_state" in st.session_state: st.session_state["dashboard_creation_state"] = "REVIEW" # Reset on critical error
+                        st.stop()
+                
+                created_chart_ids = []
+                # Optimization: Parallel Chart Creation
+                # Optimization: Parallel Chart Creation
+                def create_single_chart(chart):
+                    # NOTE: Do NOT call st.write or status.write here to avoid Missing ScriptRunContext errors in threads.
+                    viz_map = {
+                        "dist_bar": "echarts_timeseries_bar", 
+                        "bar": "echarts_timeseries_bar",
+                        "line": "echarts_timeseries_line",
+                        "pie": "pie",
+                        "big_number_total": "big_number_total"
+                    }
+                    actual_viz = viz_map.get(chart["viz_type"], chart["viz_type"])
+                    params = {
+                        "adhoc_filters": [],
+                        "row_limit": 100,
+                        "datasource": f"{dataset_id}__table",
+                        "show_legend": True,
+                        "legendOrientation": "top",
+                        "legendType": "scroll"
+                    }
+                    
+                    if chart["metric"].lower() == "count":
+                        metric_spec = "count"
+                    else:
+                        metric_spec = {
+                            "expressionType": "SIMPLE",
+                            "column": {"column_name": chart["metric"]},
+                            "aggregate": chart["agg_func"],
+                            "label": f"{chart['agg_func']} of {chart['metric']}"
+                        }
+                    
+                    if actual_viz == "big_number_total":
+                        params["metric"] = metric_spec
+                        params["subheader"] = ""
+                    elif actual_viz == "pie":
+                        params["metric"] = metric_spec
+                        if chart.get("group_by"):
+                            params["groupby"] = [chart["group_by"]]
+                    elif actual_viz in ["echarts_timeseries_bar", "echarts_timeseries_line"]:
+                        params["metrics"] = [metric_spec]
+                        if chart.get("group_by"):
+                            params["groupby"] = []
+                            params["x_axis"] = chart["group_by"]
+                    else:
+                        params["metrics"] = [metric_spec]
+                        if chart.get("group_by"):
+                            params["groupby"] = [chart["group_by"]]
+                    
+                    try:
+                        c_resp = sup.create_chart(dataset_id, chart["title"], actual_viz, params)
+                        chart_id = c_resp.get("id")
+                        chart_uuid = str(uuid.uuid4())
+                        return {"id": chart_id, "uuid": chart_uuid, "title": chart["title"]}
+                    except Exception as e:
+                        print(f"Failed to create chart '{chart['title']}': {e}")
+                        return None
+
+                created_chart_ids = []
+                
+                # Execute in parallel
+                with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                     # Submit all tasks
+                     future_to_chart = {executor.submit(create_single_chart, chart): chart for chart in updated_plan}
+                     
+                     for future in concurrent.futures.as_completed(future_to_chart):
+                         result = future.result()
+                         if result:
+                             c_id = result["id"]
+                             c_uuid = result["uuid"]
+                             title = result.get("title", "Chart")
+                             status.write(f"Created: {title}") # Update UI from Main Thread
+                             created_chart_ids.append(c_id)
+                             
+                             # Store mapping (using session state inside thread safety usually fine if just dict assign)
+                             if "chart_uuid_map" not in st.session_state:
+                                 st.session_state["chart_uuid_map"] = {}
+                             st.session_state["chart_uuid_map"][c_uuid] = c_id
+                             
+                             if "created_chart_uuids" not in st.session_state:
+                                 st.session_state["created_chart_uuids"] = []
+                             st.session_state["created_chart_uuids"].append(c_uuid)
+
+                
+                if created_chart_ids:
+                    status.write("Creating Dashboard container...")
+                    # Append timestamp to ensure unique slug
+                    import time
+                    timestamp = int(time.time())
+                    dash_name = f"Dashboard - {table_name} ({len(created_chart_ids)} charts) [{timestamp}]"
+                    dash = sup.create_dashboard(dash_name)
+                    dash_id = dash.get("id")
+                    st.session_state["current_dashboard_id"] = dash_id
+                    status.write("Linking charts to dashboard...")
+                    sup.add_charts_to_dashboard(dash_id, created_chart_ids)
+                    dash_url = sup.dashboard_url(dash_id)
+                    status.update(label="Dashboard Created!", state="complete", expanded=False)
+                    
+                    st.session_state["created_dashboard_id"] = dash_id
+                    st.session_state["created_dashboard_url"] = dash_url
+                    st.session_state["created_chart_ids"] = created_chart_ids # Store for potential rollback
+                    st.session_state["dashboard_creation_state"] = "VERIFY"
+                    
+
+                    
+                    st.rerun() 
+                else:
+                    status.error("No charts were successfully created.")
+                    # Allow retry
+                    st.session_state["dashboard_creation_state"] = "REVIEW"
+            except Exception as e:
+                status.error(f"Process failed: {e}")
+                # Allow retry
+                st.session_state["dashboard_creation_state"] = "REVIEW"
+
+    # ---------------------------------------------------------
+    # STATE 3: INPUT FORM (Default) -> REVIEW
+    # ---------------------------------------------------------
+    elif current_state == "REVIEW":
+        with st.expander("📊 Review Dashboard Plan", expanded=True):
             st.header("📊 Dashboard Plan Review")
             st.write("I've analyzed your data and prepared the following charts. You can edit them before we build the dashboard.")
             plan = st.session_state["dashboard_plan"]
             updated_plan = []
+            
             with st.form("dashboard_review_form"):
                 for i, chart in enumerate(plan):
                     st.subheader(f"Chart {i+1}")
@@ -381,370 +581,20 @@ if "dashboard_plan" in st.session_state:
                         })
                     st.divider()
                 submitted = st.form_submit_button("🚀 Create Dashboard")
-                if submitted:
-                    status = st.status("Building Dashboard...", expanded=True)
-                    try:
-                        dataset_id = st.session_state.get("current_dataset_id")
-                        db_id = st.session_state.get("superset_db_id")
-                        table_name = st.session_state.get("current_table")
-                        if not dataset_id:
-                            try:
-                                ds = sup.create_dataset(database_id=db_id, schema="public", table_name=table_name)
-                                dataset_id = ds.get("id")
-                            except Exception as e:
-                                status.error(f"Could not ensure dataset: {e}")
-                                st.stop()
-                        created_chart_ids = []
-                        for chart in updated_plan:
-                            status.write(f"Creating chart: {chart['title']}...")
-                            viz_map = {
-                                "dist_bar": "echarts_timeseries_bar",
-                                "bar": "echarts_timeseries_bar",
-                                "line": "echarts_timeseries_line",
-                                "pie": "pie",
-                                "big_number_total": "big_number_total"
-                            }
-                            actual_viz = viz_map.get(chart["viz_type"], chart["viz_type"])
-                            params = {
-                                "adhoc_filters": [],
-                                "row_limit": 100,
-                                "datasource": f"{dataset_id}__table",
-                                "show_legend": True,
-                                "legendOrientation": "top",
-                                "legendType": "scroll"
-                            }
-                            if chart["metric"].lower() == "count":
-                                metric_spec = "count"
-                            else:
-                                metric_spec = {
-                                    "expressionType": "SIMPLE",
-                                    "column": {"column_name": chart["metric"]},
-                                    "aggregate": chart["agg_func"],
-                                    "label": f"{chart['agg_func']} of {chart['metric']}"
-                                }
-                            if actual_viz == "big_number_total":
-                                params["metric"] = metric_spec
-                                params["subheader"] = ""
-                            elif actual_viz == "pie":
-                                params["metric"] = metric_spec
-                                if chart.get("group_by"):
-                                    params["groupby"] = [chart["group_by"]]
-                            elif actual_viz in ["echarts_timeseries_bar", "echarts_timeseries_line"]:
-                                params["metrics"] = [metric_spec]
-                                if chart.get("group_by"):
-                                    params["groupby"] = []
-                                    params["x_axis"] = chart["group_by"]
-                            else:
-                                params["metrics"] = [metric_spec]
-                                if chart.get("group_by"):
-                                    params["groupby"] = [chart["group_by"]]
-                            try:
-                                c_resp = sup.create_chart(dataset_id, chart["title"], actual_viz, params)
-                                created_chart_ids.append(c_resp.get("id"))
-                            except Exception as e:
-                                status.warning(f"Failed to create chart '{chart['title']}': {e}")
-                        if created_chart_ids:
-                            status.write("Creating Dashboard container...")
-                            dash_name = f"Dashboard - {table_name} ({len(created_chart_ids)} charts)"
-                            dash = sup.create_dashboard(dash_name)
-                            dash_id = dash.get("id")
-                            st.session_state["current_dashboard_id"] = dash_id
-                            status.write("Linking charts to dashboard...")
-                            sup.add_charts_to_dashboard(dash_id, created_chart_ids)
-                            dash_url = sup.dashboard_url(dash_id)
-                            status.update(label="Dashboard Created!", state="complete", expanded=False)
-                            
-                            # Store state and request confirmation
-                            st.session_state["created_dashboard_id"] = dash_id
-                            st.session_state["created_dashboard_url"] = dash_url
-                            st.session_state["waiting_for_dashboard_confirmation"] = True
-                            st.rerun()
 
-                        else:
-                            status.error("No charts were successfully created.")
-                    except Exception as e:
-                        status.error(f"Process failed: {e}")
+            if submitted:
+                # Transition to Building State
+                st.session_state["pending_dashboard_plan"] = updated_plan
+                st.session_state["pending_dashboard_plan"] = updated_plan
+                st.session_state["dashboard_creation_state"] = "BUILDING"
+                st.rerun()
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-        if message.get("chart_url"):
-            render_fullscreen_iframe(message["chart_url"], height=400)
-        if message.get("show_data"):
-             df_view = st.session_state.get("current_dataframe")
-             if df_view is not None:
-                 st.dataframe(df_view)
 
-# --- Dashboard Generation UI ---
 
-# Chat Logic
-def handle_chat_prompt(prompt, dataset_id, table_name, df=None, messages_history=None, retries=3):
-    """Interpret user chat prompt using Llama 3 via HuggingFace to either answer questions or create charts."""
-    if not HF_TOKEN:
-        return {"action": "answer", "text": "HuggingFace token not set. Unable to process request."}
-    
-    # Generate dataset context
-    context_str = ""
-    if df is not None:
-        try:
-            if DEBUG:
-                print(f"DEBUG: Generating context for DF with shape {df.shape}")
-            row_count = len(df)
-            col_info = []
-            for col in df.columns:
-                dtype = str(df[col].dtype)
-                col_info.append(f"- {col} ({dtype})")
-            columns_text = "\n".join(col_info)
-            sample_data = df.head(3).to_string(index=False)
-            context_str = f"""
-Dataset Statistics:
-- Total Rows: {row_count}
-- Columns:
-{columns_text}
-- Sample Data (first 3 rows):
-{sample_data}
-"""
-            if DEBUG:
-                print(f"DEBUG: Context String Length: {len(context_str)}")
-            # print(f"DEBUG: Context Content:\n{context_str}") # Uncomment for full context debug
-        except Exception as e:
-            if DEBUG:
-                print(f"DEBUG: Error generating context: {e}")
-            context_str = f"Error generating context: {e}"
-
-    system_instruction = f"""
-You are an Expert Data Analyst and Visualization Architect.
-Your name is 'Superset Assistant', created by Thouqeer.
-The user is asking about the dataset '{table_name}'.
-
-{context_str}
-
-### 🎯 YOUR GOAL
-Provide insightful, professional, and structured responses. Act like a senior analyst presenting findings.
-
-### 📝 RESPONSE GUIDELINES
-1.  **FORMATTING IS CRITICAL:**
-    - Use **H3 Headers (###)** to organize sections.
-    - Use **Bullet Points** for lists.
-    - Use **Bold** for key metrics and column names.
-    - Use **Blockquotes (>)** for summaries or key takeaways.
-    - Use **Emojis** effectively (📊, 💡, 🔍, ⚠️) to make the text engaging but professional.
-2.  **CONTENT STYLE:**
-    - **Be Insightful:** Don't just list numbers; explain what they might mean. (e.g., instead of "5 columns", say "The dataset consists of **5 columns**, primarily tracking sales dimensions...").
-    - **Be Direct:** Answer specific questions (row counts, column names) immediately using the provided statistics.
-    - **Be Proactive:** If the user asks about data, suggest relevant visualizations or analysis steps after your answer.
-
-### ⚠️ CRITICAL INSTRUCTIONS
-1.  **PRIORITIZE THE LATEST USER MESSAGE:** The user's LAST message (at the bottom) is your current task. Previous messages are just context.
-2.  **STOP & RESET ON GREETINGS:** If the user says "Hi", "Hello", "Thanks", "Thank you", "Bye", or simple conversational phrases:
-    - IGNORE all previous chart data instructions.
-    - REPLY ONLY with a polite conversational answer.
-    - DO NOT create a chart or explain data again.
-3.  **DATA ACCESS:** If the user asks for "count", "rows", or "columns", US THE STATISTICS ABOVE.
-4.  **SHOW DATA:** If the user asks to "see", "show", or "view" the data/table (and not a chart), set "action" to "show_data".
-5.  **JSON OUTPUT:** You must output a JSON object with at least 'action' and 'text' fields.
-    - 'text': The formatted markdown response explanation.
-    - 'action': One of ["answer", "create_chart", "show_data"].
-
-### 📊 CHART CREATION INSTRUCTIONS
-If the user asks to create a chart or visual, you MUST set "action" to "create_chart" and INCLUDE these fields in the JSON:
-- "viz_type": One of ["line", "bar", "pie", "big_number_total"].
-  - Use "line" for time series or continuous X-axis.
-  - Use "bar" for categorical comparisons.
-  - Use "pie" for simple part-to-whole.
-- "metric": The numerical column to aggregate e.g. "Sales".
-- "agg_func": One of "SUM", "AVG", "COUNT", "MIN", "MAX".
-- "group_by": The categorical/time column for X-axis.
-- "title": A descriptive title.
-
-### 👣 EXAMPLE 1 (Greeting)
-{{
-    "action": "answer",
-    "text": "### 👋 Hello!\\n\\nI'm your **Data Analyst**. I'm ready to help you explore **{table_name}**.\\n\\n**What would you like to do?**\\n- 🔍 **Analyze** specific columns\\n- 📊 **Generate** a dashboard\\n- 📋 **View** the raw data"
-}}
-
-### 👣 EXAMPLE 2 (Stats)
-{{
-    "action": "answer",
-    "text": "### 📊 Dataset Overview\\n\\nThe dataset **{table_name}** contains **2,500 rows** and **8 columns**.\\n\\n#### 🔑 Key Columns:\\n- **date** (Datetime): Transaction dates\\n- **revenue** (Float): Sales amounts\\n\\n> 💡 **Insight:** This appears to be a time-series dataset suitable for trend analysis."
-}}
-
-### 👣 EXAMPLE 3 (Create Chart)
-User: "Show me sales by region"
-{{
-    "action": "create_chart",
-    "viz_type": "bar",
-    "metric": "sales",
-    "agg_func": "SUM",
-    "group_by": "region",
-    "title": "Total Sales by Region",
-    "text": "### 📊 Sales by Region\\n\\nI've created a bar chart showing the total sales for each region. This will help identify top-performing areas."
-}}
-
-**Output VALID JSON only.**
-    """
-    
-    # Rebuild messages for proper chat structure
-    messages = [{"role": "system", "content": system_instruction}]
-    if messages_history:
-        for msg in messages_history[-5:]:
-             messages.append({"role": msg["role"], "content": msg["content"]})
-    messages.append({"role": "user", "content": f"{prompt}\n\nREMINDER: Reply with JSON only. If chatting, set 'action' to 'answer'."})
-
-    for attempt in range(retries):
-        try:
-            # Use chat_completion for conversational models
-            if attempt > 0:
-                 # On retry, remind it to be strict
-                 messages.append({"role": "user", "content": "Previous response was not valid JSON. Please output VALID JSON only. Escape quotes and newlines."})
-            
-            response = client.chat_completion(messages=messages, max_tokens=1000) # Increased tokens for dataset dumps
-            if hasattr(response, "choices"):
-                text = response.choices[0].message.content.strip()
-            else:
-                text = response.get("generated_text", "").strip()
-
-            # DEBUG: Print raw text to console (optional, but good for logs)
-            print(f"DEBUG LLM Output: {text[:200]}...")
-            with open("debug_llm.log", "a", encoding="utf-8") as f:
-                f.write(f"\n\n--- PROMPT: {prompt} ---\n")
-                f.write(f"--- RAW RESPONSE ---\n{text}\n--------------------\n")
-
-            # Strategy 1: Look for markdown code block
-            json_block = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
-            if json_block:
-                clean_text = json_block.group(1)
-            else:
-                # Strategy 2: Look for first { to last }
-                match = re.search(r'\{.*\}', text, re.DOTALL)
-                if match:
-                    clean_text = match.group(0)
-                else:
-                     clean_text = text
-
-            try:
-                # Attempt to parse
-                return json.loads(clean_text)
-            except json.JSONDecodeError:
-                # Strategy 3: Heuristic Fix - sometimes keys aren't quoted or newlines break it.
-                # If it looks like it wanted to be an answer, just return the text.
-                # Check if it looks like a chart definition (has "viz_type")
-                if "viz_type" in text or '"action": "create_chart"' in text:
-                     # Try to manually extract chart params
-                     # Try to manually extract chart params
-                     try:
-                         if DEBUG:
-                             print(f"DEBUG: Attempting manual extraction on text: {text[:100]}...")
-                         chart_fallback = {"action": "create_chart"}
-                         # Extract viz_type (flexible quotes)
-                         viz_match = re.search(r'["\']viz_type["\']\s*:\s*["\'](.*?)["\']', text)
-                         if viz_match:
-                             chart_fallback["viz_type"] = viz_match.group(1)
-                         else:
-                             # If we can't find viz_type but detected it earlier, default to bar
-                             chart_fallback["viz_type"] = "dist_bar"
-                         
-                         # Extract title
-                         title_match = re.search(r'["\']title["\']\s*:\s*["\'](.*?)["\']', text)
-                         chart_fallback["title"] = title_match.group(1) if title_match else "AI Generated Chart"
-                         
-                         # Extract metric
-                         metric_match = re.search(r'["\']metric["\']\s*:\s*["\'](.*?)["\']', text)
-                         chart_fallback["metric"] = metric_match.group(1) if metric_match else "count"
-                         
-                         # Extract agg_func
-                         agg_match = re.search(r'["\']agg_func["\']\s*:\s*["\'](.*?)["\']', text)
-                         chart_fallback["agg_func"] = agg_match.group(1) if agg_match else "SUM"
-                         
-                         # Extract group_by
-                         grp_match = re.search(r'["\']group_by["\']\s*:\s*["\'](.*?)["\']', text)
-                         chart_fallback["group_by"] = grp_match.group(1) if grp_match else None
-
-                         # Check if we also have an answer explanation text
-                         text_match = re.search(r'["\']text["\']\s*:\s*["\'](.*?)["\']', text, re.DOTALL)
-                         if text_match:
-                              chart_fallback["text"] = text_match.group(1).replace(r'\"', '"').replace(r'\\n', '\n')
-                              
-                              # CRITICAL FIX: Extract params from the text description if missing
-                              desc_text = chart_fallback["text"]
-                              
-                              # 1. Viz Type from Text
-                              if "viz_type" not in chart_fallback or chart_fallback["viz_type"] == "dist_bar":
-                                  if "line chart" in desc_text.lower(): chart_fallback["viz_type"] = "line"
-                                  elif "bar chart" in desc_text.lower(): chart_fallback["viz_type"] = "dist_bar"
-                                  elif "pie chart" in desc_text.lower(): chart_fallback["viz_type"] = "pie"
-                                  elif "number" in desc_text.lower(): chart_fallback["viz_type"] = "big_number_total"
-
-                              # 2. Group By from Text
-                              if "group_by" not in chart_fallback or not chart_fallback["group_by"]:
-                                  grp_text_match = re.search(r'\*\*Grouping:\*\*\s*(.+)', desc_text)
-                                  if grp_text_match:
-                                      chart_fallback["group_by"] = grp_text_match.group(1).strip()
-                                  else:
-                                      # Fallback: look for "groupby X"
-                                      gb_match = re.search(r'group by (\w+)', desc_text.lower())
-                                      if gb_match: chart_fallback["group_by"] = gb_match.group(1)
-
-                              # 3. Metric/Y-axis from Text
-                              if "metric" not in chart_fallback or chart_fallback["metric"] == "count":
-                                   # Look for "**Y-axis:** ..." or "**Aggregation:** ..." or "Y-axis:"
-                                   y_match = re.search(r'(?:\*\*|)?(?:Y-axis|Aggregation|Metric)(?:\*\*|)?\s*:\s*(.+)', desc_text, re.IGNORECASE)
-                                   if y_match:
-                                        # e.g. "Mean Annual Income" -> try to match column
-                                        raw_val = y_match.group(1).strip()
-                                        chart_fallback["metric"] = raw_val
-
-                              # 4. GroupBy/X-axis from Text (if not found above)
-                              if "group_by" not in chart_fallback or not chart_fallback["group_by"]:
-                                   x_match = re.search(r'(?:\*\*|)?(?:X-axis|Grouping)(?:\*\*|)?\s*:\s*(.+)', desc_text, re.IGNORECASE)
-                                   if x_match:
-                                       chart_fallback["group_by"] = x_match.group(1).strip()
-
-                         return chart_fallback
-                     except Exception:
-                         pass # Failed manual extraction too
-                
-                # Check if we can extract "text" manually if it looks like JSON
-
-                text_match = re.search(r'"text"\s*:\s*"(.*?)"', clean_text, re.DOTALL)
-                if text_match:
-                     # We found a text field, let's use it.
-                     extracted_text = text_match.group(1).replace(r'\"', '"').replace(r'\\n', '\n')
-                     return {"action": "answer", "text": extracted_text}
-
-                # Otherwise, assume it's just a conversational response that failed JSON format
-                # We interpret the WHOLE raw text as the answer.
-
-                
-                # Heuristic: Check if user wanted to show data and model replied with text "Here is the data" but failed formatting
-                text_lower = text.lower()
-                if "show_data" in text_lower or ("here" in text_lower and "data" in text_lower and "dataset" not in text_lower): 
-                     # Loose match: "Here is the data" or "show_data" in text
-                     return {"action": "show_data", "text": text}
-
-                return {"action": "answer", "text": text}
-            
-        except Exception as e:
-            # Check for network/DNS errors
-            error_str = str(e)
-            if "getaddrinfo failed" in error_str or "ConnectionError" in error_str:
-                st.warning(f"Network error: Unable to connect to AI (Attempt {attempt+1}). Checking connection...")
-                if attempt == retries - 1:
-                     return {"action": "answer", "text": "I seem to be offline or cannot reach the AI server. Please check your internet connection."}
-            else:
-                st.warning(f"Llama chat attempt {attempt+1} issue: {e}")
-            
-            if attempt == retries - 1:
-                # Final fallback
-                if 'text' in locals() and text:
-                     return {"action": "answer", "text": text}
-                return {"action": "answer", "text": f"Error: {e}"}
-            time.sleep(2 ** attempt)
-    return {"action": "answer", "text": "I'm having trouble connecting to the AI. Please try again later."}
 
 if not st.session_state.get("current_dataset_id"):
     st.info("👋 Welcome! Please upload a dataset in the sidebar to start chatting.")
-elif prompt := st.chat_input("Ask me to create a chart or explain the data..."):
+elif prompt := st.chat_input("Ask me to create chart or explain data (eg:Create line chart for Annual Income groupby Age)"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
