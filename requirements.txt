@@ -12,7 +12,7 @@ WTForms>=3.0.1
 Flask-WTF
 marshmallow>=3.19.0
 streamlit
-streamlit-altair
+altair>=5.0
 werkzeug>=2.2.3
 typing-extensions
 requests
