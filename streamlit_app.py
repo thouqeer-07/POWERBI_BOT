@@ -203,37 +203,31 @@ st.title("Superset AI Assistant")
 # Sidebar for File Upload
 with st.sidebar:
     st.header("Data Upload")
-    # Try to find the 'Supabase_Cloud' database automatically (using session_state to avoid redundant API calls)
+    
+    # 1. OPTIMIZATION: Faster connectivity check
     if "superset_db_id" not in st.session_state:
-        # Use cached lookup for speed (instant if previously found)
-        try:
-            db_id = get_cached_database_id("Supabase_Cloud")
-            if db_id:
-                st.session_state["superset_db_id"] = db_id
-        except Exception as e:
-            st.error(f"⚠️ Connection Error: Failed to connect to Superset API via Cloudflare.")
-            st.code(f"Details: {e}")
-            st.write("Retrying locally...")
-            # Do not crash, let the code fall through to the manual addition check
-        else:
-            with st.spinner("Connecting Superset to Database..."):
+        # Check if we already tried and failed to avoid loops
+        if not st.session_state.get("db_connection_attempted"):
+            with st.spinner("Connecting to Superset..."):
                 try:
-                    # Use DOCKER_DB_URI so Superset (in Docker) can reach the DB
-                    sup.add_database("Supabase_Cloud", DOCKER_DB_URI)
-                    st.success("Successfully added 'Supabase_Cloud' database to Superset!")
-                    time.sleep(1) # Wait a moment for consistency
-                    db_id = sup.get_database_id("Supabase_Cloud")
+                    # Priority 1: Check if already exists (Cached)
+                    db_id = get_cached_database_id("Supabase_Cloud")
                     if db_id:
                         st.session_state["superset_db_id"] = db_id
-                except Exception as e:
-                    # If auto-connect fails, do not stop the app. Just warn and let fallback handling take over.
-                    print(f"Auto-connect warning: {e}")
-                    # Check if we can just assume it worked or is redundant
-                    if "already exists" in str(e):
-                         st.session_state["superset_db_id"] = 1
-                         # Success message will be shown below by the main check
                     else:
-                         st.warning(f"Could not auto-connect database: {e}. Using manual selection below.")
+                        # Priority 2: Try to Add it (using internal URI)
+                        sup.add_database("Supabase_Cloud", DOCKER_DB_URI)
+                        db_id = sup.get_database_id("Supabase_Cloud")
+                        if db_id:
+                            st.session_state["superset_db_id"] = db_id
+                except Exception as e:
+                    if "already exists" in str(e).lower():
+                        # Fallback to ID 1 or search again
+                        st.session_state["superset_db_id"] = 1
+                    else:
+                        st.sidebar.warning("⚡ Superset API is currently unreachable. Direct DB mode active.")
+                finally:
+                    st.session_state["db_connection_attempted"] = True
     
     db_id = st.session_state.get("superset_db_id")
 

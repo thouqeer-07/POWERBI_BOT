@@ -112,80 +112,52 @@ class SupersetClient:
             kwargs["headers"] = self._auth_headers()
             
         import time
-        # Allow retries to be configured (default 3)
-        # We pop it from kwargs so it doesn't get passed to requests.request
-        max_retries = kwargs.pop("retries", 3)
-        retry_delay = 2 # seconds
+        # Reduced default retries to 2 for better responsiveness
+        max_retries = kwargs.pop("retries", 2)
+        # Faster retry delay
+        retry_delay = 1 # seconds
         
+        # Default timeout if not provided
+        if "timeout" not in kwargs:
+             kwargs["timeout"] = 30
+
         for attempt in range(max_retries):
             try:
-                print(f"DEBUG: {method} {url} (Attempt {attempt + 1})")
-                # Set allow_redirects=True to handle 308 redirects from no-slash to slash (common in ngrok/Superset)
+                if DEBUG:
+                    print(f"DEBUG: {method} {url} (Attempt {attempt + 1})")
+                
                 resp = self.session.request(method, url, allow_redirects=True, **kwargs)
-                print(f"DEBUG: Response Status: {resp.status_code}")
-                
-                # Log request details
-                if resp.status_code >= 400:
-                    try:
-                        error_json = resp.json()
-                        print(f"DEBUG: Response Body: {error_json}")
-                    except json.JSONDecodeError:
-                        print(f"DEBUG: Response Body: {resp.text}")
-                
-                # Specialized logging for 422 Unprocessable Entity
-                if resp.status_code == 422:
-                    print(f"❌ Superset 422 Error at {url}:")
-                    try:
-                        # Attempt to get payload from kwargs, prioritizing 'json' then 'data'
-                        payload_sent = kwargs.get('json') or kwargs.get('data')
-                        print(f"   Payload sent: {payload_sent}")
-                        print(f"   Detailed error info: {resp.json()}")
-                    except Exception:
-                        print(f"   Raw response: {resp.text}")
                 
                 # If 401, try to refresh token and retry once
                 if resp.status_code == 401:
-                    print("DEBUG: Got 401, attempting to re-authenticate...")
-                    self._token = None # Clear invalid token
-                    # Force new headers with new token
+                    if DEBUG: print("DEBUG: Got 401, re-authenticating...")
+                    self._token = None 
                     kwargs["headers"] = self._auth_headers() 
                     resp = self.session.request(method, url, **kwargs)
-                    print(f"DEBUG: Retry Response Status: {resp.status_code}")
                     
                 if not resp.ok:
-                    details = ""
-                    if resp.status_code == 422:
-                        try:
-                            err_data = resp.json()
-                            details = f" - Info: {err_data}"
-                        except:
-                            details = f" - Body: {resp.text}"
+                    if resp.status_code in [500, 502, 503, 504, 408] and attempt < max_retries - 1:
+                        if DEBUG: print(f"DEBUG: Transient error {resp.status_code}. Retrying in {retry_delay}s...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                        continue
                     
-                    print(f"DEBUG: Response Error Body: {resp.text}")
-                    
-                    # DO NOT raise here, just check if we should retry
-                    # 4xx errors (except 401) should NOT be retries by the general loop
-                    if resp.status_code < 500 and resp.status_code != 408:
-                         raise RuntimeError(f"Request failed: {resp.status_code}{details}")
-
-                if resp.status_code in [500, 502, 503, 504, 408] and attempt < max_retries - 1:
-                    print(f"DEBUG: Transient error {resp.status_code}. Retrying in {retry_delay}s...")
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                    continue
-                
-                if not resp.ok:
-                     raise RuntimeError(f"Request failed after retries: {resp.status_code}")
+                    # Log failure details
+                    try:
+                        err_body = resp.json()
+                    except:
+                        err_body = resp.text
+                    print(f"DEBUG: Request failed ({resp.status_code}): {err_body}")
+                    raise RuntimeError(f"Request failed: {resp.status_code}")
 
                 return resp
             except Exception as e:
-                if attempt < max_retries - 1:
-                    print(f"DEBUG: Request failed: {e}. Retrying in {retry_delay}s...")
+                if attempt < max_retries - 1 and "Request failed:" not in str(e):
+                    if DEBUG: print(f"DEBUG: Connection error: {e}. Retrying...")
                     time.sleep(retry_delay)
                     retry_delay *= 2
                     continue
-                # Wrap connection errors etc.
-                raise RuntimeError(f"Request failed after {max_retries} attempts: {e}")
+                raise RuntimeError(f"Request failed: {e}")
 
     def _ensure_token(self):
         if self._token:
@@ -242,42 +214,49 @@ class SupersetClient:
         return resp.json()
 
     def get_database_id(self, database_name):
-        """Find database ID by name using server-side filtering."""
+        """Find database ID by name. Priority: Direct DB -> API Filter -> API List."""
         import json
         
-        # Use Rison/JSON filter to find exact match on server side
-        # This avoids pagination issues
-        filters = [
-            {
-                "col": "database_name",
-                "opr": "eq",
-                "value": database_name
-            }
-        ]
+        # 1. OPTIMIZATION: Try Direct Metadata DB query first
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+            sql = "SELECT id FROM databases WHERE database_name = %s"
+            cursor.execute(sql, (database_name,))
+            res = cursor.fetchone()
+            cursor.close()
+            conn.close()
+            if res:
+                if DEBUG: print(f"DEBUG: Found database '{database_name}' via Direct DB (ID: {res[0]})")
+                return res[0]
+        except Exception as e:
+            if DEBUG: print(f"DEBUG: Direct DB database search failed: {e}")
+
+        # 2. Try Server-side filtering via API
+        filters = [{"col": "database_name", "opr": "eq", "value": database_name}]
         params = {"q": json.dumps({"filters": filters})}
         
         try:
-            print(f"DEBUG: Searching for database '{database_name}' via API filter...")
-            resp = self._request("GET", "api/v1/database/", params=params, timeout=30)
+            if DEBUG: print(f"DEBUG: Searching for database '{database_name}' via API filter...")
+            resp = self._request("GET", "api/v1/database/", params=params, timeout=10)
             if resp.ok:
                 dbs = resp.json().get("result", [])
                 for db in dbs:
                      if db.get("database_name") == database_name:
-                         print(f"  - Found: '{database_name}' (ID: {db.get('id')})")
                          return db.get("id")
         except Exception as e:
-            print(f"Warning: Database filtered search failed: {e}")
+            if DEBUG: print(f"Warning: Database filtered search failed: {e}")
 
-        # Fallback: List all (up to limit) and text search
-        resp = self.list_databases()
-        dbs = resp.get("result", [])
-        
-        print(f"DEBUG: Searching for database '{database_name}' in {len(dbs)} registered databases (fallback)...")
-        for db in dbs:
-            curr_name = db.get("database_name")
-            # print(f"  - Found: '{curr_name}' (ID: {db.get('id')})")
-            if curr_name and curr_name.lower() == database_name.lower():
-                return db.get("id")
+        # 3. Fallback: List all (up to limit)
+        try:
+            resp = self.list_databases()
+            dbs = resp.get("result", [])
+            for db in dbs:
+                curr_name = db.get("database_name")
+                if curr_name and curr_name.lower() == database_name.lower():
+                    return db.get("id")
+        except:
+            pass
         
         return None
 
@@ -387,72 +366,41 @@ class SupersetClient:
     def _find_dataset(self, database_id, table_name):
         """Helper to find a dataset by db and table name."""
         try:
-            # 1. Try Server-Side Filtering (Fastest)
+            # 1. OPTIMIZATION: Try Direct Database Query FIRST (Instant & Accurate)
+            if DEBUG: print("DEBUG: Searching for dataset via direct Metadata DB query...")
+            direct_result = self._find_dataset_direct(database_id, table_name)
+            if direct_result:
+                return direct_result
+
+            # 2. Try Server-Side Filtering (API)
             import json
             filters = [{"col": "table_name", "opr": "eq", "value": table_name}]
             params = {"q": json.dumps({"filters": filters})}
             
-            print(f"DEBUG: Searching for dataset '{table_name}' via API filter...")
-            resp = self._request("GET", "api/v1/dataset/", params=params, timeout=30)
+            if DEBUG: print(f"DEBUG: Searching for dataset '{table_name}' via API filter...")
+            resp = self._request("GET", "api/v1/dataset/", params=params, timeout=10)
             
-            found_ds = None
             if resp.ok:
                 datasets = resp.json().get("result", [])
                 for ds in datasets:
                      if self._check_dataset_match(ds, database_id, table_name):
                          return ds
             
-            # 2. Fallback: Brute Force Iteration (Reliable)
-            print("DEBUG: Filtered search returned nothing. Trying brute-force iteration (page_size=2000)...")
-            params = {"q": json.dumps({"page_size": 2000})} # Get EVERYTHING
-            resp = self._request("GET", "api/v1/dataset/", params=params, timeout=45)
+            # 3. Fallback: Brute Force Iteration (API) - Smaller page size for speed
+            if DEBUG: print("DEBUG: Filtered search returned nothing. Trying paginated search...")
+            params = {"q": json.dumps({"page_size": 100})} 
+            resp = self._request("GET", "api/v1/dataset/", params=params, timeout=15)
             
             if resp.ok:
                 datasets = resp.json().get("result", [])
-                print(f"DEBUG: Scanned {len(datasets)} datasets manually...")
                 for ds in datasets:
                     if self._check_dataset_match(ds, database_id, table_name):
                         return ds
             
-            # 3. Last Resort: Direct Database Query (Bypasses API visibility issues)
-            print("DEBUG: API search failed. Trying direct Metadata DB query...")
-            direct_result = self._find_dataset_direct(database_id, table_name)
-            if direct_result:
-                return direct_result
-
-            # 4. NUCLEAR OPTION: Fast Parallel Probe (IDs 1-500)
-            # If DB query failed (connection issues) and List failed (visibility), 
-            # we blindly check IDs in parallel.
-            print("DEBUG: Direct DB failed. Probing IDs 1-500 via API (Parallel)...")
+            # Note: Slow parallel probe (IDs 1-1000) removed for performance.
             
-            import concurrent.futures
-
-            def check_id(pid):
-                try:
-                    # Short timeout, we want speed
-                    r = self._request("GET", f"api/v1/dataset/{pid}", timeout=2)
-                    if r.ok:
-                        d = r.json().get("result", {})
-                        if self._check_dataset_match(d, database_id, table_name):
-                            return d
-                    else:
-                        # Log non-404 errors to help debug
-                        if r.status_code != 404:
-                            print(f"DEBUG: Probe ID {pid} failed: {r.status_code}")
-                except Exception as e:
-                    print(f"DEBUG: Probe ID {pid} error: {e}")
-                return None
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-                futures = {executor.submit(check_id, i): i for i in range(1, 1001)}
-                for future in concurrent.futures.as_completed(futures):
-                    result = future.result()
-                    if result:
-                        print(f"✅ Found dataset via Parallel Probe: ID {result.get('id')}")
-                        return result
-
         except Exception as e:
-            print(f"Warning: Could not search for existing dataset: {e}")
+            if DEBUG: print(f"Warning: Could not search for existing dataset: {e}")
         return None
 
     def _create_dataset_direct(self, database_id, schema, table_name):
@@ -851,18 +799,29 @@ class SupersetClient:
             raise RuntimeError(f"Database chart linking failed: {str(e)}")
     
     def _add_charts_to_dashboard_api(self, dashboard_id, chart_ids):
-        """Original API-based chart linking method"""
+        """Optimized API-based chart linking method (Parallel)"""
         import uuid
+        import concurrent.futures
         
         # 1. Get current dashboard
-        print(f"DEBUG: Fetching dashboard {dashboard_id} details...")
-        get_resp = self._request("GET", f"api/v1/dashboard/{dashboard_id}", timeout=30)
-        get_resp.raise_for_status()
+        if DEBUG: print(f"DEBUG: Fetching dashboard {dashboard_id} details...")
+        get_resp = self._request("GET", f"api/v1/dashboard/{dashboard_id}", timeout=10)
         data = get_resp.json().get("result")
         
-        # 2. Generate position_json
-        # We'll create a simple vertical layout
-        
+        # 2. Fetch chart details in Parallel
+        chart_details = []
+        def fetch_chart(c_id):
+            try:
+                r = self._request("GET", f"api/v1/chart/{c_id}/", timeout=10)
+                return r.json().get("result") if r.ok else None
+            except:
+                return None
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            results = list(executor.map(fetch_chart, chart_ids))
+            chart_details = [r for r in results if r]
+
+        # 3. Generate position_json
         position_json = {
             "DASHBOARD_VERSION_KEY": "v2",
             "ROOT_ID": {"type": "ROOT", "id": "ROOT_ID", "children": ["GRID_ID"]},
@@ -870,30 +829,13 @@ class SupersetClient:
         }
         
         grid_children = []
-        
-        # We need chart details for position_json, so we fetch them first
-        chart_details = []
-        for c_id in chart_ids:
-            try:
-                 c_resp = self._request("GET", f"api/v1/chart/{c_id}/", timeout=10)
-                 if c_resp.ok:
-                     chart_details.append(c_resp.json().get("result"))
-            except Exception as e:
-                print(f"Warning: Could not fetch details for chart {c_id}: {e}")
-
         for chart in chart_details:
             c_id = chart["id"]
-            # Try to find UUID, might be 'uuid' or in 'params' or elsewhere depending on version
-            # Usually top level 'uuid'
             c_uuid = chart.get("uuid")
-            
             row_id = f"ROW-{uuid.uuid4().hex[:8]}"
             chart_node_id = f"CHART-{uuid.uuid4().hex[:8]}"
             
-            # Add Row to Grid
             grid_children.append(row_id)
-            
-            # Define Row
             position_json[row_id] = {
                 "type": "ROW",
                 "id": row_id,
@@ -902,15 +844,13 @@ class SupersetClient:
                 "parents": ["ROOT_ID", "GRID_ID"]
             }
             
-            # Define Chart
             chart_meta = {
                 "chartId": int(c_id),
-                "width": 12, # Full width
+                "width": 12,
                 "height": 50,
                 "sliceName": chart.get("slice_name", "Chart")
             }
-            if c_uuid:
-                chart_meta["uuid"] = c_uuid
+            if c_uuid: chart_meta["uuid"] = c_uuid
             
             position_json[chart_node_id] = {
                 "type": "CHART",
@@ -922,31 +862,26 @@ class SupersetClient:
             
         position_json["GRID_ID"]["children"] = grid_children
         
-        # 3. Prepare payload
-        # 5. Submit update
+        # 4. Submit Dashboard Update
         payload = {
             "position_json": json.dumps(position_json),
             "published": data.get("published", False)
         }
+        if DEBUG: print(f"DEBUG: Updating dashboard {dashboard_id} with position_json...")
+        self._request("PUT", f"api/v1/dashboard/{dashboard_id}/", json=payload, timeout=20)
         
-        # 4. Update Dashboard FIRST
-        print(f"DEBUG: Updating dashboard {dashboard_id} with position_json...")
-        resp = self._request("PUT", f"api/v1/dashboard/{dashboard_id}/", json=payload, timeout=30)
-        
-        if not resp.ok:
-            print(f"DEBUG: Dashboard link API failed ({resp.status_code}): {resp.text}")
-        resp.raise_for_status()
-        
-        # 5. Link charts AFTER dashboard update
-        # This prevents the dashboard update from overwriting the links
-        print(f"DEBUG: Linking {len(chart_ids)} charts to dashboard {dashboard_id}...")
-        for c_id in chart_ids:
+        # 5. Link charts in Parallel
+        def link_chart(c_id):
             try:
                 self._request("PUT", f"api/v1/chart/{c_id}/", json={"dashboards": [int(dashboard_id)]}, timeout=10)
-            except Exception as e:
-                print(f"Warning: Failed to link chart {c_id} to dashboard: {e}")
+                return True
+            except:
+                return False
 
-        return resp.json()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            list(executor.map(link_chart, chart_ids))
+
+        return {"result": "success"}
 
     def list_dashboards(self):
         resp = self._request("GET", "api/v1/dashboard/", timeout=30)
