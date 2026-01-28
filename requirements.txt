@@ -1,9 +1,9 @@
-Flask>=2.2.5
-flask-appbuilder>=4.3.10
-pandas>=2.0.3
-SQLAlchemy>=1.4.49
-Jinja2>=3.1.2
-numpy>=1.24.4
+Flask
+flask-appbuilder
+pandas
+SQLAlchemy
+Jinja2
+numpy
 pyarrow>=12.0.1
 python-dateutil
 pytz
@@ -11,7 +11,8 @@ geopy
 WTForms>=3.0.1
 Flask-WTF
 marshmallow>=3.19.0
-
+streamlit>=1.47.0
+altair>=5.0
 werkzeug>=2.2.3
 typing-extensions
 requests
