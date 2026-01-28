@@ -13,8 +13,18 @@ client = InferenceClient(model=LLAMA_MODEL_ID, token=HF_TOKEN)
 
 DEBUG = False # Can be synced or passed in
 
-def get_llama_suggestions(df, table_name, retries=3):
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_llama_suggestions(df_serialized, table_name, retries=3):
     """Ask Llama 3 for a list of charts based on the dataframe columns using HuggingFace Inference API."""
+    import pandas as pd
+    import json
+    
+    # De-serialize dataframe if needed (though Streamlit handles it)
+    if isinstance(df_serialized, str):
+        df = pd.read_json(df_serialized)
+    else:
+        df = df_serialized
+
     if not HF_TOKEN:
         st.warning("HuggingFace token not set. Llama suggestions disabled.")
         return []
@@ -155,8 +165,23 @@ Example JSON output structure:
             time.sleep(2 ** attempt)
     return []
 
-def handle_chat_prompt(prompt, dataset_id, table_name, df=None, messages_history=None, retries=3):
+@st.cache_data(ttl=1800, show_spinner=False)
+def handle_chat_prompt(prompt, dataset_id, table_name, df_serialized=None, messages_history_tuple=None, retries=3):
     """Interpret user chat prompt using Llama 3 via HuggingFace to either answer questions or create charts."""
+    import pandas as pd
+    
+    # Convert tuple back to list for internal use
+    messages_history = list(messages_history_tuple) if messages_history_tuple else []
+    
+    # De-serialize dataframe
+    if df_serialized is not None:
+         if isinstance(df_serialized, str):
+             df = pd.read_json(df_serialized)
+         else:
+             df = df_serialized
+    else:
+        df = None
+
     if not HF_TOKEN:
         return {"action": "answer", "text": "HuggingFace token not set. Unable to process request."}
     

@@ -57,6 +57,14 @@ class SupersetClient:
         self._token = None
         self.session = requests.Session()
         self._csrf_token = None
+        
+        # --- Internal Cache for Speed ---
+        self._cache = {
+            "databases": None,
+            "columns": {}, # {dataset_id: [cols]}
+            "dashboards": None,
+            "datasets": {}  # { (db_id, table_name): dataset_dict }
+        }
 
     def _get_db_connection(self):
         """Get a database connection using DB_URI."""
@@ -216,9 +224,14 @@ class SupersetClient:
         return resp.json()
 
     def get_database_id(self, database_name):
-        """Find database ID by name. Priority: Direct DB -> API Filter -> API List."""
-        import json
+        """Find database ID by name. Priority: Cache -> Direct DB -> API Filter -> API List."""
         
+        # 0. Cache check
+        if self._cache["databases"]:
+            for db in self._cache["databases"]:
+                if db.get("database_name") == database_name:
+                    return db.get("id")
+
         # 1. OPTIMIZATION: Try Direct Metadata DB query first
         try:
             conn = self._get_db_connection()
@@ -235,6 +248,7 @@ class SupersetClient:
             if DEBUG: print(f"DEBUG: Direct DB database search failed: {e}")
 
         # 2. Try Server-side filtering via API
+        import json
         filters = [{"col": "database_name", "opr": "eq", "value": database_name}]
         params = {"q": json.dumps({"filters": filters})}
         
@@ -252,7 +266,7 @@ class SupersetClient:
         # 3. Fallback: List all (up to limit)
         try:
             resp = self.list_databases()
-            dbs = resp.get("result", [])
+            dbs = resp.get("result", []) if isinstance(resp, dict) else []
             for db in dbs:
                 curr_name = db.get("database_name")
                 if curr_name and curr_name.lower() == database_name.lower():
@@ -261,6 +275,41 @@ class SupersetClient:
             pass
         
         return None
+
+    def list_databases(self):
+        """List all databases. Uses cache if available."""
+        if self._cache["databases"]:
+            return {"result": self._cache["databases"]}
+            
+        resp = self._request("GET", "api/v1/database/", timeout=15)
+        data = resp.json()
+        self._cache["databases"] = data.get("result", [])
+        return data
+
+    def list_dashboards(self):
+        """List all dashboards. Uses cache if available."""
+        if self._cache["dashboards"]:
+            return {"result": self._cache["dashboards"]}
+            
+        resp = self._request("GET", "api/v1/dashboard/", timeout=15)
+        data = resp.json()
+        self._cache["dashboards"] = data.get("result", [])
+        return data
+
+    def get_columns(self, dataset_id):
+        """Get column names for a dataset. Uses cache."""
+        if dataset_id in self._cache["columns"]:
+            return self._cache["columns"][dataset_id]
+            
+        try:
+            resp = self._request("GET", f"api/v1/dataset/{dataset_id}", timeout=15)
+            if resp.ok:
+                cols = [c.get("column_name") for c in resp.json().get("result", {}).get("columns", [])]
+                self._cache["columns"][dataset_id] = cols
+                return cols
+        except Exception as e:
+            print(f"Warning: Could not get columns for dataset {dataset_id}: {e}")
+        return []
 
     def create_dataset(self, database_id, schema, table_name, dataset_name=None):
         """Create a dataset entry that references an existing table in a connected database.
@@ -366,12 +415,16 @@ class SupersetClient:
         raise RuntimeError(f"All dataset creation attempts failed. Errors: {json.dumps(errors, indent=2)}")
 
     def _find_dataset(self, database_id, table_name):
-        """Helper to find a dataset by db and table name."""
+        """Helper to find a dataset by db and table name. Priority: Internal Cache -> Direct DB -> API."""
+        cache_key = (int(database_id), table_name.lower())
+        if cache_key in self._cache["datasets"]:
+             return self._cache["datasets"][cache_key]
+             
         try:
             # 1. OPTIMIZATION: Try Direct Database Query FIRST (Instant & Accurate)
-            if DEBUG: print("DEBUG: Searching for dataset via direct Metadata DB query...")
             direct_result = self._find_dataset_direct(database_id, table_name)
             if direct_result:
+                self._cache["datasets"][cache_key] = direct_result
                 return direct_result
 
             # 2. Try Server-Side Filtering (API)
@@ -379,17 +432,16 @@ class SupersetClient:
             filters = [{"col": "table_name", "opr": "eq", "value": table_name}]
             params = {"q": json.dumps({"filters": filters})}
             
-            if DEBUG: print(f"DEBUG: Searching for dataset '{table_name}' via API filter...")
             resp = self._request("GET", "api/v1/dataset/", params=params, timeout=10)
             
             if resp.ok:
                 datasets = resp.json().get("result", [])
                 for ds in datasets:
                      if self._check_dataset_match(ds, database_id, table_name):
+                         self._cache["datasets"][cache_key] = ds
                          return ds
             
-            # 3. Fallback: Brute Force Iteration (API) - Smaller page size for speed
-            if DEBUG: print("DEBUG: Filtered search returned nothing. Trying paginated search...")
+            # 3. Fallback: List all (smaller page size for speed)
             params = {"q": json.dumps({"page_size": 100})} 
             resp = self._request("GET", "api/v1/dataset/", params=params, timeout=15)
             
@@ -397,10 +449,8 @@ class SupersetClient:
                 datasets = resp.json().get("result", [])
                 for ds in datasets:
                     if self._check_dataset_match(ds, database_id, table_name):
+                        self._cache["datasets"][cache_key] = ds
                         return ds
-            
-            # Note: Slow parallel probe (IDs 1-1000) removed for performance.
-            
         except Exception as e:
             if DEBUG: print(f"Warning: Could not search for existing dataset: {e}")
         return None
