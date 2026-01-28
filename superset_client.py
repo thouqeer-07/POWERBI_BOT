@@ -11,6 +11,8 @@ except ImportError:
 
 load_dotenv()
 
+DEBUG = False # Set to True for verbose logging
+
 
 class SupersetClient:
     """Minimal Apache Superset REST helper (best-effort prototype).
@@ -112,10 +114,10 @@ class SupersetClient:
             kwargs["headers"] = self._auth_headers()
             
         import time
-        # Reduced default retries to 2 for better responsiveness
-        max_retries = kwargs.pop("retries", 2)
+        # Increased retries slightly for better reliability on slow ngrok/CF tunnels
+        max_retries = kwargs.pop("retries", 3)
         # Faster retry delay
-        retry_delay = 1 # seconds
+        retry_delay = 2 # seconds
         
         # Default timeout if not provided
         if "timeout" not in kwargs:

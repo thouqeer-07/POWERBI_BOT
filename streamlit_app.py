@@ -225,7 +225,9 @@ with st.sidebar:
                         # Fallback to ID 1 or search again
                         st.session_state["superset_db_id"] = 1
                     else:
-                        st.sidebar.warning("⚡ Superset API is currently unreachable. Direct DB mode active.")
+                        st.sidebar.warning(f"⚡ Superset API unreachable: {str(e)[:100]}")
+                        if DEBUG:
+                             print(f"DEBUG: Connection error detail: {e}")
                 finally:
                     st.session_state["db_connection_attempted"] = True
     
