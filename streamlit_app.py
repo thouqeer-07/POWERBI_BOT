@@ -590,7 +590,7 @@ if "dashboard_plan" in st.session_state:
 
 if not st.session_state.get("current_dataset_id"):
     st.info("👋 Welcome! Please upload a dataset in the sidebar to start chatting.")
-elif prompt := st.chat_input("Ask me to create chart or explain data (eg:Create line chart for Annual Income groupby Age)"):
+elif prompt := st.chat_input("Ask me to create chart or explain dataset"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
