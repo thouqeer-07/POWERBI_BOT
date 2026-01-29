@@ -192,7 +192,7 @@ import time
 
 
 
-st.title("Superset AI Assistant")
+st.title("AI-Powered BI Assistant")
 
 # Sidebar for File Upload
 with st.sidebar:
