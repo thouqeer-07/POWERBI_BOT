@@ -1,6 +1,6 @@
 import streamlit as st
 import uuid
-DEBUG = True  # Set to True to enable debug prints
+DEBUG = False  # Set to True to enable debug prints
 import streamlit.components.v1 as components
 import re
 import time
@@ -159,8 +159,7 @@ def render_superset_embedded(dashboard_id, height=800):
         # Construct Public Dashboard URL
         dashboard_url = f"{sup.public_url.rstrip('/')}/superset/dashboard/{dashboard_id}/?standalone=true"
         
-        if DEBUG:
-            st.write(f"DEBUG: Rendering Iframe: {dashboard_url}")
+        
             
         components.iframe(dashboard_url, height=height, scrolling=True)
     except Exception as e:
