@@ -154,14 +154,55 @@ def render_fullscreen_iframe(url, height=800):
     components.html(html_code, height=height, scrolling=False)
  
 def render_superset_embedded(dashboard_id, height=800):
-    """Render a Superset dashboard using Direct Iframe (Fastest)."""
+    """Render a Superset dashboard using the Embedded SDK (Seamless Auth)."""
     try:
-        # Construct Public Dashboard URL directly from public_url
-        dashboard_url = f"{sup.public_url.rstrip('/')}/superset/dashboard/{dashboard_id}/?standalone=true"
-        components.iframe(dashboard_url, height=height, scrolling=True)
+        # 1. Get Embedded Config (UUID)
+        embedded_id = sup.get_or_create_embedded_config(dashboard_id)
+        
+        # 2. Get Guest Token
+        guest_token = sup.get_guest_token(dashboard_id)
+        
+        # 3. Use public URL for SDK
+        superset_domain = sup.public_url.rstrip("/")
+        
+        # 4. Render Embedded SDK via HTML component
+        # We use a unique ID for the container to avoid conflicts
+        container_id = f"superset-container-{uuid.uuid4().hex[:8]}"
+        
+        html_code = f"""
+        <div id="{container_id}" style="width: 100%; height: {height}px;"></div>
+        <script src="https://unpkg.com/@superset-ui/embedded-sdk"></script>
+        <script>
+            supersetEmbeddedSdk.embedDashboard({{
+                id: "{embedded_id}",
+                supersetDomain: "{superset_domain}",
+                mountPoint: document.getElementById("{container_id}"),
+                fetchGuestToken: () => "{guest_token}",
+                dashboardConfig: {{ 
+                    hideTitle: true,
+                    hideTab: false,
+                    hideChartControls: false,
+                    filters: {{
+                        visible: false,
+                        expanded: false,
+                    }}
+                }},
+            }});
+        </script>
+        <style>
+            iframe {{
+                width: 100%;
+                height: 100%;
+                border: none;
+            }}
+        </style>
+        """
+        components.html(html_code, height=height + 20)
+        
     except Exception as e:
-        # Minimal Fallback
-        url = f"{sup.api_url.rstrip('/')}/superset/dashboard/{dashboard_id}/?standalone=true"
+        st.error(f"Embedded Load Failed: {e}")
+        # Fallback to direct iframe if SDK fails
+        url = f"{sup.public_url.rstrip('/')}/superset/dashboard/{dashboard_id}/?standalone=true"
         components.iframe(url, height=height, scrolling=True)
  
 def scroll_to_top():
