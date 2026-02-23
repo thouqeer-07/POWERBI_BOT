@@ -43,7 +43,7 @@ BI BOT is a cutting-edge, AI-driven Business Intelligence assistant that bridges
 
 ---
 
-## Link to the app
+## 🔗Link to the Bot
 
-https://bitestbot.streamlit.app/
+[BI BOT 📊](https://bitestbot.streamlit.app/)
 
