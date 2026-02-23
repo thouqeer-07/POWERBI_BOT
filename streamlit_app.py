@@ -61,7 +61,12 @@ except Exception as e:
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_cached_database_id(db_name):
     """Cache the database ID lookup to avoid repeated API calls on startup."""
-    return sup.get_database_id(db_name)
+    try:
+        # Re-initialize client if cached data is stale or client is lost
+        client = get_superset_client()
+        return client.get_database_id(db_name)
+    except:
+        return None
 
 def render_fullscreen_iframe(url, height=800):
     """Render an iframe with a custom Full Screen toggle button."""
@@ -149,26 +154,18 @@ def render_fullscreen_iframe(url, height=800):
     components.html(html_code, height=height, scrolling=False)
  
 def render_superset_embedded(dashboard_id, height=800):
-    """Render a Superset dashboard using Direct Iframe (Fastest)."""
+    """Render a Superset dashboard using Direct Iframe (Bypassing SDK)."""
     try:
-        # Optimization: We use Public Access, so we skip the expensive Guest Token/Embedded SDK calls.
-        # This saves 2-3 API roundtrips (approx 5-10 seconds).
-        
-        # 1. Construct Public Dashboard URL
-        # e.g. .../superset/dashboard/{id}/?standalone=true
+        # Construct Public Dashboard URL
         dashboard_url = f"{sup.public_url.rstrip('/')}/superset/dashboard/{dashboard_id}/?standalone=true"
         
-        if DEBUG:
-            print(f"DEBUG: Rendering dashboard directly: {dashboard_url}")
         
-        # 2. Simple Iframe
+            
         components.iframe(dashboard_url, height=height, scrolling=True)
-        
     except Exception as e:
-        st.error(f"Failed to load dashboard: {e}")
-        # Fallback
-        url = sup.dashboard_url(dashboard_id)
-        render_fullscreen_iframe(url, height=height)
+        st.error(f"Embedded Load Failed: {e}")
+        url = f"{sup.api_url.rstrip('/')}/superset/dashboard/{dashboard_id}/?standalone=true"
+        components.iframe(url, height=height, scrolling=True)
  
 def scroll_to_top():
     """Inject Javascript to scroll the page to the top robustly."""
@@ -198,42 +195,37 @@ import time
 
 
 
-st.title("AI Powered BI BOT")
+st.title("AI-Powered BI Assistant")
 
 # Sidebar for File Upload
 with st.sidebar:
     st.header("Data Upload")
-    # Try to find the 'Supabase_Cloud' database automatically (using session_state to avoid redundant API calls)
+    
+    # 1. OPTIMIZATION: Faster connectivity check
     if "superset_db_id" not in st.session_state:
-        # Use cached lookup for speed (instant if previously found)
-        try:
-            db_id = get_cached_database_id("Supabase_Cloud")
-            if db_id:
-                st.session_state["superset_db_id"] = db_id
-        except Exception as e:
-            st.error(f"⚠️ Connection Error: Failed to connect to Superset API via Cloudflare.")
-            st.code(f"Details: {e}")
-            st.write("Retrying locally...")
-            # Do not crash, let the code fall through to the manual addition check
-        else:
-            with st.spinner("Connecting Superset to Database..."):
+        # Check if we already tried and failed to avoid loops
+        if not st.session_state.get("db_connection_attempted"):
+            with st.spinner("Connecting to Superset..."):
                 try:
-                    # Use DOCKER_DB_URI so Superset (in Docker) can reach the DB
-                    sup.add_database("Supabase_Cloud", DOCKER_DB_URI)
-                    st.success("Successfully added 'Supabase_Cloud' database to Superset!")
-                    time.sleep(1) # Wait a moment for consistency
-                    db_id = sup.get_database_id("Supabase_Cloud")
+                    # Priority 1: Check if already exists (Cached)
+                    db_id = get_cached_database_id("Supabase_Cloud")
                     if db_id:
                         st.session_state["superset_db_id"] = db_id
-                except Exception as e:
-                    # If auto-connect fails, do not stop the app. Just warn and let fallback handling take over.
-                    print(f"Auto-connect warning: {e}")
-                    # Check if we can just assume it worked or is redundant
-                    if "already exists" in str(e):
-                         st.session_state["superset_db_id"] = 1
-                         # Success message will be shown below by the main check
                     else:
-                         st.warning(f"Could not auto-connect database: {e}. Using manual selection below.")
+                        # Priority 2: Try to Add it (using internal URI)
+                        # We use a non-cached call here because adding is a mutation
+                        sup.add_database("Supabase_Cloud", DOCKER_DB_URI)
+                        db_id = sup.get_database_id("Supabase_Cloud")
+                        if db_id:
+                            st.session_state["superset_db_id"] = db_id
+                            st.cache_data.clear() # Clear cache to reflect new DB
+                except Exception as e:
+                    if "already exists" in str(e).lower():
+                        st.session_state["superset_db_id"] = 1
+                    else:
+                        st.sidebar.warning("⚡ Superset API unreachable.")
+                finally:
+                    st.session_state["db_connection_attempted"] = True
     
     db_id = st.session_state.get("superset_db_id")
 
@@ -594,7 +586,7 @@ if "dashboard_plan" in st.session_state:
 
 if not st.session_state.get("current_dataset_id"):
     st.info("👋 Welcome! Please upload a dataset in the sidebar to start chatting.")
-elif prompt := st.chat_input("Ask me to create chart or explain data (eg:Create line chart for Annual Income groupby Age)"):
+elif prompt := st.chat_input("Ask me to create chart or explain dataset"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -617,9 +609,8 @@ elif prompt := st.chat_input("Ask me to create chart or explain data (eg:Create 
         if clean_prompt in greetings or (len(clean_prompt.split()) < 3 and any(g in clean_prompt for g in greetings)):
              # Short greeting detected
              with st.spinner("Thinking..."):
-                 # Use a lightweight call or just context-free call
-                 # We pass EMPTY history to prevent it from seeing the previous chart request and repeating it.
-                 result = handle_chat_prompt(prompt, ds_id, tbl_name, df=None, messages_history=[])
+                 # Pass a tuple for history to make it hashable for caching
+                 result = handle_chat_prompt(prompt, ds_id, tbl_name, df_serialized=None, messages_history_tuple=())
         
         # 2. Show Data Check
         elif "show" in lower_prompt and ("data" in lower_prompt or "table" in lower_prompt or "dataset" in lower_prompt) and "chart" not in lower_prompt:
@@ -627,18 +618,17 @@ elif prompt := st.chat_input("Ask me to create chart or explain data (eg:Create 
              if st.session_state.get("current_dataframe") is not None:
                  result = {"action": "show_data", "text": "Sure, here is the dataset:"}
              else:
-                # If no df in memory, try to fall back or just let LLM handle/explain
                  with st.spinner("Thinking..."):
                     df_context = st.session_state.get("current_dataframe")
-                    history = st.session_state.messages[:-1] 
-                    result = handle_chat_prompt(prompt, ds_id, tbl_name, df=df_context, messages_history=history)
+                    history = tuple(st.session_state.messages[:-1]) # Convert to tuple for hashing
+                    result = handle_chat_prompt(prompt, ds_id, tbl_name, df_serialized=df_context, messages_history_tuple=history)
         
         # 3. Standard Query
         else:
             with st.spinner("Thinking..."):
                 df_context = st.session_state.get("current_dataframe")
-                history = st.session_state.messages[:-1] 
-                result = handle_chat_prompt(prompt, ds_id, tbl_name, df=df_context, messages_history=history)
+                history = tuple(st.session_state.messages[:-1]) # Convert to tuple for hashing
+                result = handle_chat_prompt(prompt, ds_id, tbl_name, df_serialized=df_context, messages_history_tuple=history)
         
         if DEBUG:
             print(f"DEBUG: result object from chat: {result}") # Tracing why text is empty

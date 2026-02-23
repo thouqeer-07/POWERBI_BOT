@@ -1,0 +1,1000 @@
+﻿superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:15 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:32:18,442:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:18 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:32:21,586:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:21 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:32:26,826:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:26 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:32:30,417:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:30 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:32:32,541:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:32 +0000] "GET /api/v1/database/ HTTP/1.1" 200 873 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2025-12-24 12:32:33,250:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:33 +0000] "GET /favicon.ico HTTP/1.1" 404 0 "https://prot-analog-thousands-drilling.trycloudflare.com/api/v1/database/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2025-12-24 12:32:33,556:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:33 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:32:38,697:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:38 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:41 +0000] "GET / HTTP/1.1" 302 223 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2025-12-24 12:32:41,902:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:41 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:32:42 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 2025-12-24 12:32:43,988:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /superset/welcome/ HTTP/1.1" 200 4007 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/css/fontawesome/regular.min.css HTTP/1.1" 200 327 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/css/fontawesome/v4-shims.min.css HTTP/1.1" 200 4352 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/css/fontawesome/fontawesome.min.css HTTP/1.1" 200 17395 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/css/bootstrap.min.css HTTP/1.1" 200 19736 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/css/select2/select2.min.css HTTP/1.1" 200 1996 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/css/fontawesome/solid.min.css HTTP/1.1" 200 325 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/js/ab.js HTTP/1.1" 200 937 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/css/fontawesome/brands.min.css HTTP/1.1" 200 4724 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/css/bootstrap-datepicker/bootstrap-datepicker3.min.css HTTP/1.1" 200 2391 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/css/ab.css HTTP/1.1" 200 330 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/js/ab_actions.js HTTP/1.1" 200 1106 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/css/flags/flags16.css HTTP/1.1" 200 1744 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/js/select2/select2.min.js HTTP/1.1" 200 19904 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/css/select2/select2-bootstrap.min.css HTTP/1.1" 200 2338 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/js/jquery-latest.js HTTP/1.1" 200 30947 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/js/ab_filters.js HTTP/1.1" 200 1372 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/js/bootstrap.min.js HTTP/1.1" 200 10940 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/appbuilder/js/bootstrap-datepicker/bootstrap-datepicker.min.js HTTP/1.1" 200 10117 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:44 +0000] "GET /static/assets/theme.4db50a5129907903f819.entry.css HTTP/1.1" 200 85855 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2025-12-24 12:32:45,171:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:45 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/theme.4db50a5129907903f819.entry.js HTTP/1.1" 200 0 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/preamble.0f60ff0c1e5d9c1dc06b.entry.js HTTP/1.1" 200 1040 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/9601.50a1fa9bff1b3b70dcbe.entry.js HTTP/1.1" 200 18427 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/2320.a35e7d5ed77a2bc52d9e.entry.js HTTP/1.1" 200 14954 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/9897.70098354ead69d024f28.entry.js HTTP/1.1" 200 12938 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/387.bf4935cac0d30509c165.entry.js HTTP/1.1" 200 27750 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/menu.760021a5fa239712e6c3.entry.js HTTP/1.1" 200 4925 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/9698cc7dbf147ed363b6.woff2 HTTP/1.1" 200 0 "https://prot-analog-thousands-drilling.trycloudflare.com/static/assets/theme.4db50a5129907903f819.entry.css" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/vendors.550cd2480f8c70dc73c1.entry.js HTTP/1.1" 200 349173 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/9285.e0b3812ffa96395c8d65.entry.js HTTP/1.1" 200 7451 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/6550.f2dfe131e2f51729e4b7.entry.js HTTP/1.1" 200 24511 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/2741.67ec86c376f3df9f9ee4.entry.js HTTP/1.1" 200 30346 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/5151.1ac384ac65a6bd6212c7.entry.js HTTP/1.1" 200 87663 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/689.d52698772846ac06112a.entry.js HTTP/1.1" 200 95426 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:45 +0000] "GET /static/assets/7065.36e3d8975a5ae63c997d.entry.js HTTP/1.1" 200 198064 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:47 +0000] "GET /static/assets/images/superset-logo-horiz.png HTTP/1.1" 200 0 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:48 +0000] "GET /static/assets/2864e632c6ca8e085c7d.chunk.js HTTP/1.1" 200 466 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:48 +0000] "GET /static/appbuilder/css/webfonts/fa-solid-900.woff2 HTTP/1.1" 200 0 "https://prot-analog-thousands-drilling.trycloudflare.com/static/appbuilder/css/fontawesome/solid.min.css" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:32:49 +0000] "GET /static/assets/images/favicon.png HTTP/1.1" 200 0 "https://prot-analog-thousands-drilling.trycloudflare.com/superset/welcome/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
+superset_app  | 2025-12-24 12:32:50,586:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:50 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:32:53,910:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:53 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 2025-12-24 12:32:57,205:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:32:57 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:02,338:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/charts/api.py", line 340, in post
+superset_app  |     new_model = CreateChartCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/chart/create.py", line 51, in run
+superset_app  |     return ChartDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1228, in get_all_pending
+superset_app  |     ret = [(instance_state(current), current)]
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:02 +0000] "POST /api/v1/chart/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:05,169:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/dashboards/api.py", line 584, in post
+superset_app  |     new_model = CreateDashboardCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/dashboard/create.py", line 44, in run
+superset_app  |     return DashboardDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1417, in get_all_pending
+superset_app  |     current_states = [
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1418, in <listcomp>
+superset_app  |     ((c is not None) and instance_state(c) or None, c)
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:05 +0000] "POST /api/v1/dashboard/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:08,700:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/dashboards/api.py", line 584, in post
+superset_app  |     new_model = CreateDashboardCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/dashboard/create.py", line 44, in run
+superset_app  |     return DashboardDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1417, in get_all_pending
+superset_app  |     current_states = [
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1418, in <listcomp>
+superset_app  |     ((c is not None) and instance_state(c) or None, c)
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:08 +0000] "POST /api/v1/dashboard/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:33:13 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 2025-12-24 12:33:13,574:ERROR:flask_appbuilder.api:'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask_appbuilder/api/__init__.py", line 111, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 120, in wraps
+superset_app  |     duration, response = time_function(f, self, *args, **kwargs)
+superset_app  |   File "/app/superset/utils/core.py", line 1369, in time_function
+superset_app  |     response = func(*args, **kwargs)
+superset_app  |   File "/app/superset/utils/log.py", line 304, in wrapper
+superset_app  |     value = f(*args, **kwargs)
+superset_app  |   File "/app/superset/views/base_api.py", line 92, in wraps
+superset_app  |     return f(self, *args, **kwargs)
+superset_app  |   File "/app/superset/dashboards/api.py", line 584, in post
+superset_app  |     new_model = CreateDashboardCommand(item).run()
+superset_app  |   File "/app/superset/utils/decorators.py", line 266, in wrapped
+superset_app  |     return on_error(ex)
+superset_app  |   File "/app/superset/utils/decorators.py", line 236, in on_error
+superset_app  |     raise ex
+superset_app  |   File "/app/superset/utils/decorators.py", line 259, in wrapped
+superset_app  |     result = func(*args, **kwargs)
+superset_app  |   File "/app/superset/commands/dashboard/create.py", line 44, in run
+superset_app  |     return DashboardDAO.create(attributes=self._properties)
+superset_app  |   File "/app/superset/daos/base.py", line 140, in create
+superset_app  |     db.session.add(item)
+superset_app  |   File "<string>", line 2, in add
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2648, in add
+superset_app  |     self._save_or_update_state(state)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/session.py", line 2675, in _save_or_update_state
+superset_app  |     for o, m, st_, dct_ in mapper.cascade_iterator(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/mapper.py", line 3309, in cascade_iterator
+superset_app  |     queue = deque(
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/relationships.py", line 1995, in cascade_iterator
+superset_app  |     tuples = state.manager[self.key].impl.get_all_pending(state, dict_)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1417, in get_all_pending
+superset_app  |     current_states = [
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/sqlalchemy/orm/attributes.py", line 1418, in <listcomp>
+superset_app  |     ((c is not None) and instance_state(c) or None, c)
+superset_app  | AttributeError: 'AnonymousUserMixin' object has no attribute '_sa_instance_state'
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:13 +0000] "POST /api/v1/dashboard/ HTTP/1.1" 500 26 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:19,385:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:19 +0000] "GET /api/v1/dashboard/24 HTTP/1.1" 200 371 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:20,004:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:20 +0000] "GET /api/v1/chart/140/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:22,547:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:22 +0000] "GET /api/v1/chart/140/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:26,907:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:26 +0000] "GET /api/v1/chart/140/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:27,276:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:27 +0000] "GET /api/v1/chart/141/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:30,214:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:30 +0000] "GET /api/v1/chart/141/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:34,640:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:34 +0000] "GET /api/v1/chart/141/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:35,035:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:35 +0000] "GET /api/v1/chart/142/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:37,578:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:37 +0000] "GET /api/v1/chart/142/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:42,202:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:42 +0000] "GET /api/v1/chart/142/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:42,616:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:42 +0000] "GET /api/v1/chart/143/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:33:43 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 2025-12-24 12:33:45,093:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:45 +0000] "GET /api/v1/chart/143/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:49,478:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:49 +0000] "GET /api/v1/chart/143/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:49,981:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:49 +0000] "GET /api/v1/chart/144/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:52,444:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:52 +0000] "GET /api/v1/chart/144/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:56,843:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:56 +0000] "GET /api/v1/chart/144/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:57,246:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:57 +0000] "GET /api/v1/chart/145/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:33:59,746:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:33:59 +0000] "GET /api/v1/chart/145/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:34:04,128:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:34:04 +0000] "GET /api/v1/chart/145/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:34:04,544:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:34:04 +0000] "PUT /api/v1/dashboard/24/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:34:06,960:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:34:06 +0000] "PUT /api/v1/dashboard/24/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:34:11,397:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1458, in dispatch_request
+superset_app  |     self.raise_routing_exception(req)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1440, in raise_routing_exception
+superset_app  |     raise request.routing_exception  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/ctx.py", line 353, in match_request
+superset_app  |     result = self.url_adapter.match(return_rule=True)  # type: ignore
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/routing/map.py", line 629, in match
+superset_app  |     raise NotFound() from None
+superset_app  | werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:34:11 +0000] "PUT /api/v1/dashboard/24/ HTTP/1.1" 404 0 "-" "python-requests/2.32.5"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:34:13 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 2025-12-24 12:34:16,038:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:34:16 +0000] "GET /api/v1/dashboard/24/embedded HTTP/1.1" 404 3 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:34:19,253:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:34:19 +0000] "GET /api/v1/dashboard/24/embedded HTTP/1.1" 404 3 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:34:24,347:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:34:24 +0000] "GET /api/v1/dashboard/24/embedded HTTP/1.1" 404 3 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:34:25,870:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:34:25 +0000] "POST /api/v1/dashboard/24/embedded HTTP/1.1" 200 163 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:34:26,936:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:34:27 +0000] "POST /api/v1/security/guest_token/ HTTP/1.1" 200 389 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:34:28,848:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1469, in dispatch_request
+superset_app  |     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+superset_app  |   File "/app/superset/utils/log.py", line 302, in wrapper
+superset_app  |     value = f(*args, add_extra_log_payload=log, **kwargs)
+superset_app  |   File "/app/superset/embedded/view.py", line 67, in embedded
+superset_app  |     abort(403)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/helpers.py", line 277, in abort
+superset_app  |     current_app.aborter(code, *args, **kwargs)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/exceptions.py", line 876, in __call__
+superset_app  |     raise self.mapping[code](*args, **kwargs)
+superset_app  | werkzeug.exceptions.Forbidden: 403 Forbidden: You don't have the permission to access the requested resource. It is either read-protected or not readable by the server.
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:34:28 +0000] "GET /embedded/28c83eb1-b4d4-4cbc-a788-8330fe6be7ff HTTP/1.1" 403 336 "https://bi-bot.streamlit.app/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:34:44 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:35:14 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:35:44 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:35:52 +0000] "POST /api/v1/security/login HTTP/1.1" 200 344 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:35:53,385:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:35:53 +0000] "GET /api/v1/security/csrf_token/ HTTP/1.1" 200 105 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:35:54,583:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:35:54 +0000] "GET /api/v1/dashboard/24/embedded HTTP/1.1" 200 163 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:35:59,066:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:35:59 +0000] "PUT /api/v1/dashboard/24/embedded HTTP/1.1" 200 163 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:35:59,939:WARNING:root:Failed to add user to db session: Class 'werkzeug.local.LocalProxy' is not mapped
+superset_app  | 34.19.100.134 - - [24/Dec/2025:12:36:00 +0000] "POST /api/v1/security/guest_token/ HTTP/1.1" 200 392 "-" "python-requests/2.32.5"
+superset_app  | 2025-12-24 12:36:01,960:WARNING:superset.views.error_handling:HTTPException
+superset_app  | Traceback (most recent call last):
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1484, in full_dispatch_request
+superset_app  |     rv = self.dispatch_request()
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/app.py", line 1469, in dispatch_request
+superset_app  |     return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+superset_app  |   File "/app/superset/utils/log.py", line 302, in wrapper
+superset_app  |     value = f(*args, add_extra_log_payload=log, **kwargs)
+superset_app  |   File "/app/superset/embedded/view.py", line 67, in embedded
+superset_app  |     abort(403)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/flask/helpers.py", line 277, in abort
+superset_app  |     current_app.aborter(code, *args, **kwargs)
+superset_app  |   File "/app/.venv/lib/python3.10/site-packages/werkzeug/exceptions.py", line 876, in __call__
+superset_app  |     raise self.mapping[code](*args, **kwargs)
+superset_app  | werkzeug.exceptions.Forbidden: 403 Forbidden: You don't have the permission to access the requested resource. It is either read-protected or not readable by the server.
+superset_app  | 2409:40f4:3e:b5cf:50bf:5521:5265:dc89 - - [24/Dec/2025:12:36:02 +0000] "GET /embedded/28c83eb1-b4d4-4cbc-a788-8330fe6be7ff HTTP/1.1" 403 336 "https://bi-bot.streamlit.app/" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:36:14 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:36:45 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:37:15 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:37:45 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:38:15 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:38:46 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:39:16 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:39:47 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:40:17 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:40:47 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:41:17 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:41:48 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:42:18 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:42:48 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:43:18 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:43:48 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:44:19 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:44:49 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:45:19 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:45:49 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"
+superset_app  | 127.0.0.1 - - [24/Dec/2025:12:46:19 +0000] "GET /health HTTP/1.1" 200 2 "-" "curl/7.88.1"

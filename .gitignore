@@ -1,6 +1,5 @@
 .env
-.env.example
-/superset
+superset.env
 /.venv
 /__pycache__/
 *.pyc   
