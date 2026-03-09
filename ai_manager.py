@@ -1,21 +1,26 @@
-import streamlit as st
 import os
+import sys
 import re
 import json
 import time
 import difflib
-from huggingface_hub import InferenceClient
+import google.generativeai as genai
+from dotenv import load_dotenv
 
-# Initialize HuggingFace Client
-HF_TOKEN = st.secrets.get("HUGGINGFACE_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
-LLAMA_MODEL_ID = st.secrets.get("LLAMA_MODEL_ID") or os.getenv("LLAMA_MODEL_ID", "meta-llama/Meta-Llama-3-8B-Instruct")
-client = InferenceClient(model=LLAMA_MODEL_ID, token=HF_TOKEN)
+load_dotenv()
+
+# Initialize Gemini Client
+GOOGLE_API_KEY = os.getenv("GOOGLE_API")
+if GOOGLE_API_KEY:
+    genai.configure(api_key=GOOGLE_API_KEY)
+
+# We use the recommended standard model
+GEMINI_MODEL_ID = "gemini-2.5-flash"
 
 DEBUG = False # Can be synced or passed in
 
-@st.cache_data(ttl=3600, show_spinner=False)
 def get_llama_suggestions(df_serialized, table_name, retries=3):
-    """Ask Llama 3 for a list of charts based on the dataframe columns using HuggingFace Inference API."""
+    """Ask Gemini 2.5 Flash for a list of charts based on the dataframe columns."""
     import pandas as pd
     import json
     
@@ -25,8 +30,8 @@ def get_llama_suggestions(df_serialized, table_name, retries=3):
     else:
         df = df_serialized
 
-    if not HF_TOKEN:
-        st.warning("HuggingFace token not set. Llama suggestions disabled.")
+    if not GOOGLE_API_KEY:
+        print("WARNING: GOOGLE_API token not set. Gemini suggestions disabled.")
         return []
         
     # Prepare column info
@@ -37,7 +42,7 @@ def get_llama_suggestions(df_serialized, table_name, retries=3):
         col_info.append(f"- {col} ({dtype}): e.g., {sample}")
     col_text = "\n".join(col_info)
 
-    system_prompt = f"""
+    system_instruction = f"""
 You are an expert Data Analyst and Visualization Architect.
 I have a dataset '{table_name}' with the following columns:
 {col_text}
@@ -73,14 +78,19 @@ Example JSON output structure:
     numeric_cols = set(df.select_dtypes(include=['number']).columns)
     datetime_cols = set(df.select_dtypes(include=['datetime', 'datetimetz']).columns)
     
+    # Configure Gemini Model
+    model = genai.GenerativeModel(
+        model_name=GEMINI_MODEL_ID,
+        system_instruction=system_instruction,
+        generation_config={"response_mime_type": "application/json"}
+    )
+    
     for attempt in range(retries):
         try:
-            # Use chat_completion for conversational Llama models
-            response = client.chat_completion(messages=[{"role": "user", "content": system_prompt}], max_tokens=500)
-            if hasattr(response, "choices"):
-                text = response.choices[0].message.content.strip()
-            else:
-                text = response.get("generated_text", "").strip()
+            response = model.generate_content(
+                "Provide the visualization suggestions JSON array now."
+            )
+            text = response.text.strip()
             
             # Extract JSON array using regex
             match = re.search(r'\[.*\]', text, re.DOTALL)
@@ -160,14 +170,13 @@ Example JSON output structure:
             return validated_plans
         except Exception as e:
             if attempt == retries - 1:
-                st.error(f"Llama suggestion failed (Final Attempt): {e}")
+                print(f"ERROR: Gemini suggestion failed (Final Attempt): {e}")
                 return []
             time.sleep(2 ** attempt)
     return []
 
-@st.cache_data(ttl=1800, show_spinner=False)
 def handle_chat_prompt(prompt, dataset_id, table_name, df_serialized=None, messages_history_tuple=None, retries=3):
-    """Interpret user chat prompt using Llama 3 via HuggingFace to either answer questions or create charts."""
+    """Interpret user chat prompt using Gemini 2.5 Flash to either answer questions or create charts."""
     import pandas as pd
     
     # Convert tuple back to list for internal use
@@ -182,8 +191,8 @@ def handle_chat_prompt(prompt, dataset_id, table_name, df_serialized=None, messa
     else:
         df = None
 
-    if not HF_TOKEN:
-        return {"action": "answer", "text": "HuggingFace token not set. Unable to process request."}
+    if not GOOGLE_API_KEY:
+        return {"action": "answer", "text": "GOOGLE_API token not set. Unable to process request."}
     
     # Generate dataset context
     context_str = ""
@@ -238,7 +247,7 @@ Provide insightful, professional, and structured responses. Act like a senior an
 
 ### CHART CREATION INSTRUCTIONS
 If the user asks to create a chart, set "action" to "create_chart" and include:
-- "viz_type": One of ["line", "bar", "pie", "big_number_total"].
+- "viz_type": One of ["line", "dist_bar", "pie", "big_number_total"].
 - "metric": The numerical column.
 - "agg_func": One of "SUM", "AVG", "COUNT", "MIN", "MAX".
 - "group_by": The categorical/time column.
@@ -247,48 +256,49 @@ If the user asks to create a chart, set "action" to "create_chart" and include:
 ### EXAMPLE 1 (Greeting)
 {{
     "action": "answer",
-    "text": "### 👋 Hello!\\n\\nI am your Data Analyst. I am ready to help you explore **{{table_name}}**."
+    "text": "### 👋 Hello!\\n\\nI am your Data Analyst. I am ready to help you explore **{table_name}**."
 }}
 
 ### EXAMPLE 2 (Stats)
 {{
     "action": "answer",
-    "text": "### 📊 Dataset Overview\\n\\nThe dataset **{{table_name}}** contains results."
+    "text": "### 📊 Dataset Overview\\n\\nThe dataset **{table_name}** contains results."
 }}
 
 **Output VALID JSON only.**
     '''
     
-    messages = [{"role": "system", "content": system_instruction}]
+    # Configure Gemini Model
+    model = genai.GenerativeModel(
+        model_name=GEMINI_MODEL_ID,
+        system_instruction=system_instruction,
+        generation_config={"response_mime_type": "application/json"}
+    )
+    
+    # Format chat history for Gemini
+    gemini_history = []
     if messages_history:
         for msg in messages_history[-5:]:
-             messages.append({"role": msg["role"], "content": msg["content"]})
-    messages.append({"role": "user", "content": f"{prompt}\n\nREMINDER: Reply with JSON only. If chatting, set 'action' to 'answer'."})
+             role = "user" if msg["role"] == "user" else "model"
+             gemini_history.append({"role": role, "parts": [msg["content"]]})
+             
+    final_prompt = f"{prompt}\n\nREMINDER: Reply with JSON only. If chatting, set 'action' to 'answer'."
 
     for attempt in range(retries):
         try:
-            if attempt > 0:
-                 messages.append({"role": "user", "content": "Previous response was not valid JSON. Please output VALID JSON only."})
+            # We can use start_chat to maintain history properly
+            chat = model.start_chat(history=gemini_history)
+            response = chat.send_message(final_prompt)
             
-            response = client.chat_completion(messages=messages, max_tokens=1000)
-            if hasattr(response, "choices"):
-                text = response.choices[0].message.content.strip()
-            else:
-                text = response.get("generated_text", "").strip()
-
-            # Extract JSON from response
-            json_block = re.search(r'```json\s*(\{.*?\})\s*```', text, re.DOTALL)
-            if json_block:
-                clean_text = json_block.group(1)
-            else:
-                match = re.search(r'\{.*\}', text, re.DOTALL)
-                clean_text = match.group(0) if match else text
-
+            text = response.text.strip()
+            
             try:
-                return json.loads(clean_text)
+                # Since we forced application/json, it should be valid JSON
+                return json.loads(text)
             except json.JSONDecodeError:
+                # Just in case Gemini wrapped it in markdown anyway
                 if "viz_type" in text or '"action": "create_chart"' in text:
-                    # Manual extraction fallback (Same as original code)
+                    # Manual extraction fallback
                     chart_fallback = {"action": "create_chart"}
                     viz_match = re.search(r'["\']viz_type["\']\s*:\s*["\'](.*?)["\']', text)
                     chart_fallback["viz_type"] = viz_match.group(1) if viz_match else "dist_bar"
@@ -301,9 +311,16 @@ If the user asks to create a chart, set "action" to "create_chart" and include:
                     grp_match = re.search(r'["\']group_by["\']\s*:\s*["\'](.*?)["\']', text)
                     chart_fallback["group_by"] = grp_match.group(1) if grp_match else None
                     return chart_fallback
-                return {"action": "answer", "text": text}
+                    
+                if attempt == retries - 1:
+                    return {"action": "answer", "text": text}
+                
+                final_prompt = "Previous response was not valid JSON. Please output VALID JSON only."
+                continue
+                
         except Exception as e:
             if attempt == retries - 1:
-                return {"action": "answer", "text": f"Error: {e}"}
+                return {"action": "answer", "text": f"Error interacting with Gemini: {e}"}
             time.sleep(1)
+            
     return {"action": "answer", "text": "Failed to get response."}

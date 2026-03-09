@@ -28,32 +28,34 @@ class SupersetClient:
       you typically need a writable database and Superset configured with that database.
     """
 
-    def __init__(self, api_url=None, public_url=None, api_key=None, username=None, password=None, database_id=None):
-        # Helper to get secret/env
-        def get_conf(key, default=None):
-            val = None
-            if st and hasattr(st, "secrets"):
-                try:
-                    val = st.secrets.get(key)
-                except Exception:
-                    pass
-            return val or os.getenv(key) or default
+    def _get_conf(self, key, default=None):
+        """Helper to get secret/env safely (avoiding streamlit error in CLI/FastAPI)."""
+        val = None
+        if st and hasattr(st, "secrets"):
+            try:
+                # Use .get() and check the internal _secrets to be sure it exists
+                # This prevents StreamlitSecretNotFoundError when not in Streamlit context
+                val = st.secrets.get(key)
+            except Exception:
+                pass
+        return val or os.getenv(key) or default
 
+    def __init__(self, api_url=None, public_url=None, api_key=None, username=None, password=None, database_id=None):
         # Internal API URL (used by this script to talk to Superset)
-        self.api_url = (api_url or get_conf("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
+        self.api_url = (api_url or self._get_conf("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
         
         # Public URL (used by the browser to embed dashboards)
         # Fallback to api_url if not provided
-        self.public_url = (public_url or get_conf("SUPERSET_PUBLIC_URL") or self.api_url).rstrip("/")
+        self.public_url = (public_url or self._get_conf("SUPERSET_PUBLIC_URL") or self.api_url).rstrip("/")
         
         # Backward compatibility for code that still uses self.superset_url
         self.superset_url = self.api_url
         
-        self.api_key = api_key or get_conf("SUPERSET_API_KEY")
-        self.username = username or get_conf("SUPERSET_USERNAME")
-        self.password = password or get_conf("SUPERSET_PASSWORD")
-        self.database_id = database_id or get_conf("SUPERSET_DATABASE_ID")
-        self.db_uri = get_conf("DB_URI") # Cache this once on init (main thread)
+        self.api_key = api_key or self._get_conf("SUPERSET_API_KEY")
+        self.username = username or self._get_conf("SUPERSET_USERNAME")
+        self.password = password or self._get_conf("SUPERSET_PASSWORD")
+        self.database_id = database_id or self._get_conf("SUPERSET_DATABASE_ID")
+        self.db_uri = self._get_conf("DB_URI") # Cache this once on init (main thread)
         self._token = None
         self.session = requests.Session()
         self._csrf_token = None
@@ -286,6 +288,66 @@ class SupersetClient:
         self._cache["databases"] = data.get("result", [])
         return data
 
+    def list_datasets(self):
+        """List all datasets. Fetches from API or fallback to metadata DB."""
+        try:
+            # Try API first
+            resp = self._request("GET", "api/v1/dataset/", timeout=15)
+            if resp.ok:
+                data = resp.json()
+                return data.get("result", [])
+        except Exception as e:
+            print(f"Warning: API dataset listing failed: {e}")
+
+        # Fallback: Direct DB query
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+            # Select relevant fields for building a dataset-like object
+            sql = "SELECT id, table_name, schema, database_id, changed_on FROM tables"
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+            cursor.close()
+            conn.close()
+            
+            datasets = []
+            for row in rows:
+                datasets.append({
+                    "id": row[0],
+                    "table_name": row[1],
+                    "schema": row[2],
+                    "database": {"id": row[3]},
+                    "changed_on": row[4].isoformat() if row[4] else None
+                })
+            return datasets
+        except Exception as e:
+            print(f"Warning: Direct DB dataset listing failed: {e}")
+            return []
+
+    def get_table_data(self, table_name, limit=100):
+        """Fetch sample data from a table directly from the database."""
+        try:
+            from sqlalchemy import create_engine, text
+            import pandas as pd
+            
+            # Use SQLAlchemy engine for more robust read_sql, especially with Superbase/v2.0
+            engine = create_engine(self.db_uri)
+            with engine.connect() as conn:
+                # Use quoted table name to handle mixed case/special characters
+                query = text(f'SELECT * FROM "{table_name}" LIMIT {limit}')
+                df = pd.read_sql(query, conn)
+                
+                print(f"DEBUG: Successfully fetched {len(df)} rows from '{table_name}'")
+                return {
+                    "columns": df.columns.tolist(),
+                    "rows": df.to_dict(orient="records")
+                }
+        except Exception as e:
+            import traceback
+            print(f"ERROR: Direct DB data fetch failed for table '{table_name}': {e}")
+            traceback.print_exc()
+            return {"columns": [], "rows": []}
+
     def list_dashboards(self):
         """List all dashboards. Uses cache if available."""
         if self._cache["dashboards"]:
@@ -464,7 +526,7 @@ class SupersetClient:
             raise RuntimeError("psycopg2 not installed")
 
         conn = None
-        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        metadata_db_uri = self._get_conf("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         
         try:
             print(f"Creating dataset via database: {table_name}")
@@ -580,7 +642,7 @@ class SupersetClient:
             return resp.json()
         except Exception as e:
             # Check if we should even attempt direct DB fallback
-            metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or ""
+            metadata_db_uri = self._get_conf("SUPERSET_METADATA_DB_URI") or ""
             is_local_db = "localhost" in metadata_db_uri or "127.0.0.1" in metadata_db_uri or not metadata_db_uri
             
             # If in Streamlit Cloud (detected via environment) and DB is local, don't fall back
@@ -637,7 +699,7 @@ class SupersetClient:
         # Connect directly to PostgreSQL for metadata (slices, charts, etc.)
         conn = None
         # We use a dedicated metadata URI if provided, otherwise default to local
-        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        metadata_db_uri = self._get_conf("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Attempting metadata database connection...")
             conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
@@ -709,16 +771,29 @@ class SupersetClient:
             raise RuntimeError("psycopg2 not installed")
         
         dashboard_uuid = str(uuid.uuid4())
+        # Improved slug generation: lowercase, replace spaces/underscores, collapse multiple hyphens
+        import re
         slug = dashboard_title.lower().replace(" ", "-").replace("_", "-")
+        slug = re.sub(r'-+', '-', slug).strip('-')
         
         conn = None
-        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        metadata_db_uri = self._get_conf("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Creating dashboard via database: {dashboard_title}")
             conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
             
             cursor = conn.cursor()
-            
+
+            # Check for existing slug first to avoid UniqueViolation
+            check_sql = "SELECT id, dashboard_title FROM dashboards WHERE slug = %s"
+            cursor.execute(check_sql, (slug,))
+            existing = cursor.fetchone()
+            if existing:
+                print(f"✅ Found existing dashboard with slug '{slug}' (ID: {existing[0]})")
+                cursor.close()
+                conn.close()
+                return {"id": existing[0], "dashboard_title": existing[1], "slug": slug}
+
             sql = """
             INSERT INTO dashboards (
                 dashboard_title, slug, published, uuid,
@@ -729,11 +804,22 @@ class SupersetClient:
             
             # Minimal position_json
             position_json = json.dumps({"DASHBOARD_VERSION_KEY": "v2"})
+
             
-            cursor.execute(sql, (dashboard_title, slug, published, dashboard_uuid, position_json))
-            dashboard_id = cursor.fetchone()[0]
+            try:
+                cursor.execute(sql, (dashboard_title, slug, published, dashboard_uuid, position_json))
+                dashboard_id = cursor.fetchone()[0]
+                conn.commit()
+            except psycopg2.errors.UniqueViolation:
+                conn.rollback()
+                print(f"⚠️ UniqueViolation on slug '{slug}'. Fetching existing record...")
+                cursor.execute("SELECT id FROM dashboards WHERE slug = %s", (slug,))
+                row = cursor.fetchone()
+                if row:
+                    dashboard_id = row[0]
+                else:
+                    raise RuntimeError(f"UniqueViolation occurred but existing record for slug '{slug}' not found.")
             
-            conn.commit()
             cursor.close()
             conn.close()
             
@@ -764,7 +850,7 @@ class SupersetClient:
             return self._add_charts_to_dashboard_api(dashboard_id, chart_ids)
         except Exception as e:
             # Check if we should fall back
-            metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or ""
+            metadata_db_uri = self._get_conf("SUPERSET_METADATA_DB_URI") or ""
             is_local_db = "localhost" in metadata_db_uri or "127.0.0.1" in metadata_db_uri or not metadata_db_uri
             
             if os.getenv("STREAMLIT_SERVER_PORT") and is_local_db:
@@ -784,7 +870,7 @@ class SupersetClient:
             raise RuntimeError("psycopg2 not installed")
         
         conn = None
-        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        metadata_db_uri = self._get_conf("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Linking {len(chart_ids)} charts to dashboard {dashboard_id} via database...")
             conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
@@ -799,30 +885,40 @@ class SupersetClient:
             
             grid_children = []
             
-            for idx, c_id in enumerate(chart_ids):
+            # Group charts into chunks of 2 for a 2-column layout
+            charts_per_row = 2
+            chart_chunks = [chart_ids[i:i+charts_per_row] for i in range(0, len(chart_ids), charts_per_row)]
+            
+            for chunk in chart_chunks:
                 row_id = f"ROW-{uuid.uuid4().hex[:8]}"
-                chart_node_id = f"CHART-{uuid.uuid4().hex[:8]}"
-                
                 grid_children.append(row_id)
+                
+                row_children = []
+                for c_id in chunk:
+                    chart_node_id = f"CHART-{uuid.uuid4().hex[:8]}"
+                    row_children.append(chart_node_id)
+                    
+                    # Width is 12 total per row, so 12 / 2 = 6 width
+                    chart_width = 12 // charts_per_row
+                    
+                    position_json[chart_node_id] = {
+                        "type": "CHART",
+                        "id": chart_node_id,
+                        "children": [],
+                        "meta": {
+                            "chartId": int(c_id),
+                            "width": chart_width,
+                            "height": 50
+                        },
+                        "parents": ["ROOT_ID", "GRID_ID", row_id]
+                    }
                 
                 position_json[row_id] = {
                     "type": "ROW",
                     "id": row_id,
-                    "children": [chart_node_id],
+                    "children": row_children,
                     "meta": {"background": "BACKGROUND_TRANSPARENT"},
                     "parents": ["ROOT_ID", "GRID_ID"]
-                }
-                
-                position_json[chart_node_id] = {
-                    "type": "CHART",
-                    "id": chart_node_id,
-                    "children": [],
-                    "meta": {
-                        "chartId": int(c_id),
-                        "width": 12,
-                        "height": 50
-                    },
-                    "parents": ["ROOT_ID", "GRID_ID", row_id]
                 }
             
             position_json["GRID_ID"]["children"] = grid_children
@@ -850,6 +946,113 @@ class SupersetClient:
                 conn.close()
             raise RuntimeError(f"Database chart linking failed: {str(e)}")
     
+    def append_chart_to_dashboard(self, dashboard_id, chart_id):
+        """Append a single newly created chart to an existing dashboard via direct DB."""
+        import uuid
+        import json
+        try:
+            import psycopg2
+        except ImportError:
+            raise RuntimeError("psycopg2 not installed")
+        
+        conn = None
+        metadata_db_uri = self._get_conf("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        try:
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
+            cursor = conn.cursor()
+            
+            # Fetch existing position_json
+            cursor.execute("SELECT position_json FROM dashboards WHERE id = %s", (int(dashboard_id),))
+            row = cursor.fetchone()
+            if not row or not row[0]:
+                raise RuntimeError(f"Dashboard {dashboard_id} not found or has no position_json")
+                
+            position_json_str = row[0]
+            if isinstance(position_json_str, str):
+                position_json = json.loads(position_json_str)
+            else:
+                position_json = position_json_str
+                
+            # Find GRID_ID to append a new ROW
+            grid = position_json.get("GRID_ID")
+            if not grid:
+                grid = {"type": "GRID", "id": "GRID_ID", "children": [], "parents": ["ROOT_ID"]}
+                position_json["GRID_ID"] = grid
+                
+            last_row_id = None
+            if grid.get("children"):
+                last_row_id = grid["children"][-1]
+                
+            row_children = None
+            if last_row_id and position_json.get(last_row_id):
+                last_row = position_json[last_row_id]
+                if last_row["type"] == "ROW" and len(last_row.get("children", [])) < 2:
+                    row_children = last_row.setdefault("children", [])
+            
+            chart_node_id = f"CHART-{uuid.uuid4().hex[:8]}"
+            chart_width = 12 // 2 # keep 2-column width (6)
+            
+            if row_children is not None and len(row_children) < 2 and last_row_id:
+                # Appending to existing row
+                row_children.append(chart_node_id)
+                position_json[chart_node_id] = {
+                    "type": "CHART",
+                    "id": chart_node_id,
+                    "children": [],
+                    "meta": {
+                        "chartId": int(chart_id),
+                        "width": chart_width,
+                        "height": 50
+                    },
+                    "parents": ["ROOT_ID", "GRID_ID", last_row_id]
+                }
+            else:
+                # Create a new row
+                new_row_id = f"ROW-{uuid.uuid4().hex[:8]}"
+                grid.setdefault("children", []).append(new_row_id)
+                
+                position_json[new_row_id] = {
+                    "type": "ROW",
+                    "id": new_row_id,
+                    "children": [chart_node_id],
+                    "meta": {"background": "BACKGROUND_TRANSPARENT"},
+                    "parents": ["ROOT_ID", "GRID_ID"]
+                }
+                
+                position_json[chart_node_id] = {
+                    "type": "CHART",
+                    "id": chart_node_id,
+                    "children": [],
+                    "meta": {
+                        "chartId": int(chart_id),
+                        "width": chart_width,
+                        "height": 50
+                    },
+                    "parents": ["ROOT_ID", "GRID_ID", new_row_id]
+                }
+                
+            # Update dashboard position_json
+            update_sql = "UPDATE dashboards SET position_json = %s, changed_on = NOW() WHERE id = %s"
+            cursor.execute(update_sql, (json.dumps(position_json), int(dashboard_id)))
+            
+            # Link chart to dashboard in dashboard_slices table
+            link_sql = "INSERT INTO dashboard_slices (dashboard_id, slice_id) VALUES (%s, %s) ON CONFLICT DO NOTHING"
+            cursor.execute(link_sql, (int(dashboard_id), int(chart_id)))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            print(f"✅ Appended chart {chart_id} to dashboard {dashboard_id} via database")
+            return {"result": "success", "dashboard_id": dashboard_id, "chart_id": chart_id}
+            
+        except Exception as e:
+            print(f"❌ Database chart appending failed: {type(e).__name__}: {str(e)}")
+            if conn:
+                conn.rollback()
+                conn.close()
+            raise RuntimeError(f"Database chart appending failed: {str(e)}")
+            
     def _add_charts_to_dashboard_api(self, dashboard_id, chart_ids):
         """Optimized API-based chart linking method (Parallel)"""
         import uuid
@@ -857,8 +1060,17 @@ class SupersetClient:
         
         # 1. Get current dashboard
         if DEBUG: print(f"DEBUG: Fetching dashboard {dashboard_id} details...")
-        get_resp = self._request("GET", f"api/v1/dashboard/{dashboard_id}", timeout=10)
-        data = get_resp.json().get("result")
+        try:
+            get_resp = self._request("GET", f"api/v1/dashboard/{dashboard_id}", timeout=10)
+            data = get_resp.json().get("result")
+        except Exception as e:
+            # If 404, we might have just created it via DB, so we can't use the API to get details.
+            # Use minimal defaults if API fails.
+            if "404" in str(e):
+                print(f"DEBUG: Dashboard {dashboard_id} not found via API. Using defaults.")
+                data = {"published": False}
+            else:
+                raise e
         
         # 2. Fetch chart details in Parallel
         chart_details = []
@@ -881,35 +1093,45 @@ class SupersetClient:
         }
         
         grid_children = []
-        for chart in chart_details:
-            c_id = chart["id"]
-            c_uuid = chart.get("uuid")
+        charts_per_row = 2
+        chart_chunks = [chart_details[i:i+charts_per_row] for i in range(0, len(chart_details), charts_per_row)]
+        
+        for chunk in chart_chunks:
             row_id = f"ROW-{uuid.uuid4().hex[:8]}"
-            chart_node_id = f"CHART-{uuid.uuid4().hex[:8]}"
-            
             grid_children.append(row_id)
+            
+            row_children = []
+            for chart in chunk:
+                c_id = chart["id"]
+                c_uuid = chart.get("uuid")
+                chart_node_id = f"CHART-{uuid.uuid4().hex[:8]}"
+                
+                row_children.append(chart_node_id)
+                
+                chart_width = 12 // charts_per_row
+                
+                chart_meta = {
+                    "chartId": int(c_id),
+                    "width": chart_width,
+                    "height": 50,
+                    "sliceName": chart.get("slice_name", "Chart")
+                }
+                if c_uuid: chart_meta["uuid"] = c_uuid
+                
+                position_json[chart_node_id] = {
+                    "type": "CHART",
+                    "id": chart_node_id,
+                    "children": [],
+                    "meta": chart_meta,
+                    "parents": ["ROOT_ID", "GRID_ID", row_id]
+                }
+                
             position_json[row_id] = {
                 "type": "ROW",
                 "id": row_id,
-                "children": [chart_node_id],
+                "children": row_children,
                 "meta": {"background": "BACKGROUND_TRANSPARENT"},
                 "parents": ["ROOT_ID", "GRID_ID"]
-            }
-            
-            chart_meta = {
-                "chartId": int(c_id),
-                "width": 12,
-                "height": 50,
-                "sliceName": chart.get("slice_name", "Chart")
-            }
-            if c_uuid: chart_meta["uuid"] = c_uuid
-            
-            position_json[chart_node_id] = {
-                "type": "CHART",
-                "id": chart_node_id,
-                "children": [],
-                "meta": chart_meta,
-                "parents": ["ROOT_ID", "GRID_ID", row_id]
             }
             
         position_json["GRID_ID"]["children"] = grid_children
@@ -983,7 +1205,14 @@ class SupersetClient:
         return resp.json()
 
     def dashboard_url(self, dashboard_id):
-        return f"{self.public_url}/superset/dashboard/{dashboard_id}/"
+        # Remove trailing slash to make parameter appending in frontend more predictable
+        base_url = self.public_url.rstrip('/')
+        return f"{base_url}/superset/dashboard/{dashboard_id}"
+
+    def chart_url(self, chart_id):
+        """Return the URL to view a single chart in explore mode."""
+        base_url = self.public_url.rstrip('/')
+        return f"{base_url}/superset/explore/?slice_id={chart_id}"
 
     def delete_dashboard(self, dashboard_id):
         """Delete a dashboard by ID."""
@@ -1003,7 +1232,7 @@ class SupersetClient:
             raise RuntimeError("psycopg2 not installed")
         
         conn = None
-        metadata_db_uri = st.secrets.get("SUPERSET_METADATA_DB_URI") or os.getenv("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        metadata_db_uri = self._get_conf("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
         try:
             print(f"Deleting dashboard {dashboard_id} via database...")
             conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
@@ -1071,7 +1300,7 @@ class SupersetClient:
             print(f"DEBUG: Guest token API failed ({resp.status_code}). Attempting manual JWT generation...")
             # NUCLEAR FALLBACK: Generate the token ourselves if we have the secret key
             # This bypasses the API checks entirely.
-            secret = st.secrets.get("SUPERSET_SECRET_KEY") or os.getenv("SUPERSET_SECRET_KEY")
+            secret = self._get_conf("SUPERSET_SECRET_KEY")
             if not secret:
                  # Try to read it from config file if local
                  try:
