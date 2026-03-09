@@ -61,4 +61,4 @@ BI BOT is a cutting-edge, AI-driven Business Intelligence assistant that bridges
 
 ## UI
 
-![alt text](image.png)
+![BI BOT Interface](assets/image.png)
