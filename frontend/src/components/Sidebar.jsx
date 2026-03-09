@@ -28,7 +28,7 @@ const Sidebar = ({ isOpen, activeTab, onTabChange, onUploadClick, onClose }) => 
                         </div>
                         <div className={isOpen ? 'opacity-100 transition-opacity duration-300' : 'opacity-0'}>
                             <h1 className="text-white font-bold text-lg leading-tight">BI BOT</h1>
-                            <p className="text-xs text-slate-500 font-medium tracking-wide">ENTERPRISE OS</p>
+                            <p className="text-xs text-slate-500 font-medium tracking-wide">BOT</p>
                         </div>
                     </div>
                 </div>

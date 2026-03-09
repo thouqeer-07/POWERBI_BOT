@@ -1,5 +1,15 @@
 # 🤖 BI BOT: AI-Powered BI Assistant
 
+[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen?style=for-the-badge&logo=netlify)](https://thouqeer.netlify.app/)
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Gemini](https://img.shields.io/badge/Gemini-8E75C2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/)
+[![Superset](https://img.shields.io/badge/Superset-0073B7?style=for-the-badge&logo=apachesuperset&logoColor=white)](https://superset.apache.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
+
 BI BOT is a cutting-edge, AI-driven Business Intelligence assistant that bridges the gap between raw data and actionable insights. By combining the power of **React**, **FastAPI**, **Google Gemini**, and **Apache Superset**, it automates the process of data analysis and visualization.
 
 ---
@@ -48,4 +58,4 @@ BI BOT is a cutting-edge, AI-driven Business Intelligence assistant that bridges
 ## 🔗 Link to the Bot
 
 [BI BOT 📊](https://bitestbot.streamlit.app/) *(Note: Deployment link might be updated soon to reflect new architecture)*
-
+![alt text](image.png)
