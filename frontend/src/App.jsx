@@ -12,6 +12,7 @@ function App() {
     const [sessionId, setSessionId] = useState(null);
     const [initialPlan, setInitialPlan] = useState(null);
     const [dashboardUrl, setDashboardUrl] = useState(null);
+    const [columns, setColumns] = useState([]);
     const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
 
     // Lifted Chat State
@@ -93,6 +94,7 @@ function App() {
                             setMessages={setMessages}
                             currentPlan={currentPlan}
                             setCurrentPlan={setCurrentPlan}
+                            columns={columns}
                         />
                     )}
                     {activeTab === 'dashboard' && <DashboardView url={dashboardUrl} />}
@@ -107,6 +109,7 @@ function App() {
                         setSessionId(data.session_id);
                         setMessages(prev => [...prev, { role: 'assistant', content: null, isPlan: true }]);
                         setCurrentPlan(data.plan);
+                        setColumns(data.columns || []);
                         setIsUploadOpen(false);
                         setActiveTab('chat');
                     }}

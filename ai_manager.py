@@ -4,34 +4,33 @@ import re
 import json
 import time
 import difflib
-import google.generativeai as genai
+from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialize Gemini Client
-GOOGLE_API_KEY = os.getenv("GOOGLE_API")
-if GOOGLE_API_KEY:
-    genai.configure(api_key=GOOGLE_API_KEY)
+# Initialize Hugging Face Client
+HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
+# We use Llama 3 8B Instruct as the default powerful balanced model
+LLAMA_MODEL_ID = "meta-llama/Meta-Llama-3-8B-Instruct"
 
-# We use the recommended standard model
-GEMINI_MODEL_ID = "gemini-2.5-flash"
+client = None
+if HF_TOKEN:
+    client = InferenceClient(token=HF_TOKEN)
 
-DEBUG = False # Can be synced or passed in
+DEBUG = False
 
 def get_llama_suggestions(df_serialized, table_name, retries=3):
-    """Ask Gemini 2.5 Flash for a list of charts based on the dataframe columns."""
+    """Ask Llama 3 via Hugging Face for a list of charts based on the dataframe columns."""
     import pandas as pd
-    import json
     
-    # De-serialize dataframe if needed (though Streamlit handles it)
     if isinstance(df_serialized, str):
         df = pd.read_json(df_serialized)
     else:
         df = df_serialized
 
-    if not GOOGLE_API_KEY:
-        print("WARNING: GOOGLE_API token not set. Gemini suggestions disabled.")
+    if not client:
+        print("WARNING: HUGGINGFACE_TOKEN not set. AI suggestions disabled.")
         return []
         
     # Prepare column info
@@ -50,22 +49,24 @@ I have a dataset '{table_name}' with the following columns:
 Your goal is to suggest 4-6 diverse, meaningful, and accurate visualizations to summarize this data.
 - Analyze the column names and data types to understand the semantic meaning (e.g., time, category, money).
 - Suggest charts that reveal key insights, trends, or distributions.
+- IMPORTANT: Ensure variety. Do not suggest 4 bar charts. Use a mix of bar, line (if time-series), pie, and big_number_total.
 
 CRITICAL INSTRUCTIONS:
 1. Return ONLY a valid JSON array of objects.
 2. "viz_type" MUST be strictly one of: ["dist_bar", "pie", "line", "big_number_total"].
-   - Use "dist_bar" for categorical comparisons or time-series bars.
-   - Use "line" ONLY if there is a clear time series or ordered numerical x-axis.
-   - Use "pie" for part-to-whole comparisons (few categories).
-   - Use "big_number_total" for single aggregate metrics (e.g. Total Revenue).
+   - Use "dist_bar" for categorical comparisons (e.g., by City, Gender, Status).
+   - Use "line" ONLY if there is a real Date/Time column.
+   - Use "pie" for partitions with few unique categories.
+   - Use "big_number_total" for simple counts or totals.
 3. "agg_func" MUST be one of: ["SUM", "AVG", "COUNT", "MAX", "MIN"].
 4. Ensure "metric" is a numeric column (or "count").
-5. valid JSON only. No markdown formatting, no conversational text.
+5. "group_by" should be a categorical or date column. For "big_number_total", set "group_by" to null.
+6. valid JSON only. No conversation, no explanations.
 
 Example JSON output structure:
 [
   {{
-    "title": "Revenue by Region",
+    "title": "Total Revenue by Region",
     "viz_type": "dist_bar",
     "metric": "sales_amount",
     "group_by": "region",
@@ -73,26 +74,27 @@ Example JSON output structure:
   }}
 ]
 """
-    # Helper for validation
     valid_cols = set(df.columns)
     numeric_cols = set(df.select_dtypes(include=['number']).columns)
     datetime_cols = set(df.select_dtypes(include=['datetime', 'datetimetz']).columns)
     
-    # Configure Gemini Model
-    model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL_ID,
-        system_instruction=system_instruction,
-        generation_config={"response_mime_type": "application/json"}
-    )
-    
     for attempt in range(retries):
         try:
-            response = model.generate_content(
-                "Provide the visualization suggestions JSON array now."
-            )
-            text = response.text.strip()
+            messages = [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": "Provide the visualization suggestions JSON array now."}
+            ]
             
-            # Extract JSON array using regex
+            response = client.chat_completion(
+                model=LLAMA_MODEL_ID,
+                messages=messages,
+                max_tokens=1000,
+                temperature=0.2
+            )
+            
+            text = response.choices[0].message.content.strip()
+            
+            # Extract JSON array using regex in case Llama adds extra text
             match = re.search(r'\[.*\]', text, re.DOTALL)
             if match:
                 text = match.group(0)
@@ -104,63 +106,43 @@ Example JSON output structure:
                 continue
 
             validated_plans = []
-            
             for p in plans:
-                # 1. Sanitize Basic Fields
                 p["title"] = p.get("title", "Untitled Chart").strip()
                 p["viz_type"] = p.get("viz_type", "dist_bar").strip().lower()
-                
-                # 2. Validate Aggregation Function
                 p["agg_func"] = p.get("agg_func", "COUNT").upper()
                 if p["agg_func"] not in ["SUM", "AVG", "COUNT", "MAX", "MIN"]:
                     p["agg_func"] = "COUNT"
                 
-                # 3. Validate Metric
                 raw_metric = p.get("metric")
                 if raw_metric:
-                    # Fuzzy match metric column
                     matches = difflib.get_close_matches(raw_metric, list(valid_cols), n=1, cutoff=0.7)
-                    if matches:
-                         p["metric"] = matches[0]
-                    elif raw_metric.lower() == "count":
-                         p["metric"] = "count"
-                    else:
-                         p["metric"] = "count" # Fallback if unknown
-                else:
-                    p["metric"] = "count"
+                    if matches: p["metric"] = matches[0]
+                    elif raw_metric.lower() == "count": p["metric"] = "count"
+                    else: p["metric"] = "count"
+                else: p["metric"] = "count"
                 
                 if p["metric"] != "count" and p["metric"] not in numeric_cols and p["agg_func"] in ["SUM", "AVG"]:
                      p["agg_func"] = "COUNT"
 
-                # 4. Validate Group By
                 raw_group = p.get("group_by")
                 if str(raw_group).lower() in ["null", "none", ""]:
                     p["group_by"] = None
                 elif raw_group:
                      matches = difflib.get_close_matches(raw_group, list(valid_cols), n=1, cutoff=0.7)
-                     if matches:
-                         p["group_by"] = matches[0]
-                     else:
-                         p["group_by"] = None
+                     if matches: p["group_by"] = matches[0]
+                     else: p["group_by"] = None
                 
-                # 5. Logical Consistency Checks (The "Perfect" Logic)
                 if p["viz_type"] == "line":
                     is_time = False
                     if p["group_by"]:
-                        if p["group_by"] in datetime_cols:
-                            is_time = True
-                        elif "date" in p["group_by"].lower() or "year" in p["group_by"].lower() or "month" in p["group_by"].lower():
+                        if p["group_by"] in datetime_cols or any(k in p["group_by"].lower() for k in ["date", "time", "year", "month"]):
                              is_time = True
-                    
-                    if not is_time:
-                         p["viz_type"] = "dist_bar"
+                    if not is_time: p["viz_type"] = "dist_bar"
                 
                 if p["viz_type"] == "pie" and not p["group_by"]:
                      obj_cols = df.select_dtypes(include=['object', 'category']).columns
-                     if len(obj_cols) > 0:
-                         p["group_by"] = obj_cols[0]
-                     else:
-                         p["viz_type"] = "big_number_total"
+                     if len(obj_cols) > 0: p["group_by"] = obj_cols[0]
+                     else: p["viz_type"] = "big_number_total"
                 
                 if p["viz_type"] == "big_number_total":
                     p["group_by"] = None
@@ -170,19 +152,17 @@ Example JSON output structure:
             return validated_plans
         except Exception as e:
             if attempt == retries - 1:
-                print(f"ERROR: Gemini suggestion failed (Final Attempt): {e}")
+                print(f"ERROR: Llama suggestion failed: {e}")
                 return []
-            time.sleep(2 ** attempt)
+            time.sleep(2)
     return []
 
 def handle_chat_prompt(prompt, dataset_id, table_name, df_serialized=None, messages_history_tuple=None, retries=3):
-    """Interpret user chat prompt using Gemini 2.5 Flash to either answer questions or create charts."""
+    """Interpret user chat prompt using Llama 3 via Hugging Face."""
     import pandas as pd
     
-    # Convert tuple back to list for internal use
     messages_history = list(messages_history_tuple) if messages_history_tuple else []
     
-    # De-serialize dataframe
     if df_serialized is not None:
          if isinstance(df_serialized, str):
              df = pd.read_json(df_serialized)
@@ -191,10 +171,9 @@ def handle_chat_prompt(prompt, dataset_id, table_name, df_serialized=None, messa
     else:
         df = None
 
-    if not GOOGLE_API_KEY:
-        return {"action": "answer", "text": "GOOGLE_API token not set. Unable to process request."}
+    if not client:
+        return {"action": "answer", "text": "HUGGINGFACE_TOKEN not set. Unable to process request."}
     
-    # Generate dataset context
     context_str = ""
     if df is not None:
         try:
@@ -217,110 +196,83 @@ Dataset Statistics:
             context_str = f"Error generating context: {e}"
 
     system_instruction = f'''
-You are an Expert Data Analyst and Visualization Architect.
-Your name is 'Superset Assistant', created by Syed Thouqeer Ahmed A.
+You are an Expert Data Analyst named 'Superset Assistant'.
+Created by Syed Thouqeer Ahmed A.
 The user is asking about the dataset "{table_name}".
 
 {context_str}
 
-### YOUR GOAL
-Provide insightful, professional, and structured responses. Act like a senior analyst presenting findings.
+### YOUR MISSION
+Provide **insightful, professional, and visually stunning** responses. Your goal is to WOW the user with his highly-expressive and bold-happy formatting.
 
-### RESPONSE GUIDELINES
-1. FORMATTING IS CRITICAL:
-    - Use H3 Headers (###) to organize sections.
-    - Use Bullet Points for lists.
-    - Use Bold for key metrics and column names.
-    - Use Blockquotes (>) for summaries or key takeaways.
-    - Use Emojis effectively.
-2. CONTENT STYLE:
-    - Be Insightful: Do not just list numbers; explain what they might mean.
-    - Be Direct: Answer specific questions immediately.
-    - Be Proactive: Suggest relevant visualizations.
+### 🎨 DESIGN & FORMATTING RULES
+1. **HEADER HIERARCHY**: Always use `###` for main headers.
+2. **AGGRESSIVE BOLDING**: Use **bold text** for **EVERY** important metric, **column name**, **number**, or **key insight**. If it's important, **BOLD IT**.
+3. **STRICT LISTS**: Use standard Markdown `- ` for bullets.
+4. **EMOJI EXPLOSION**: Use **at least one emoji** for **EVERY** bullet point and header. Be creative! (🚀, 💎, ✨, 📊, 📈, 🎯, 💡, 📅, 🔍).
+5. **NEATNESS**: Ensure a blank line between headers and paragraphs.
 
-### CRITICAL INSTRUCTIONS
-1. PRIORITIZE THE LATEST USER MESSAGE: The user latest message at the bottom is your current task.
-2. STOP AND RESET ON GREETINGS: If the user says Hi, Hello, Thanks, etc., reply politely and ignore previous data instructions.
-3. DATA ACCESS: Use the STATISTICS ABOVE.
-4. SHOW DATA: If the user asks to see or view the data table, set action to "show_data".
-5. JSON OUTPUT: Output a JSON object with at least "action" and "text" fields.
+### 🤖 LOGIC RULES
+1. **ONLY** use `action: "create_chart"` if the user's **LATEST** message explicitly asks for a new visualization.
+2. For all other queries (Greetings, "Explain the data", "Show rows", etc.), use `action: "answer"`.
+3. **MANDATORY TEXT**: Every response **MUST** include a helpful `text` field with at least 2-3 sentences of explanation.
 
-### CHART CREATION INSTRUCTIONS
-If the user asks to create a chart, set "action" to "create_chart" and include:
-- "viz_type": One of ["line", "dist_bar", "pie", "big_number_total"].
-- "metric": The numerical column.
-- "agg_func": One of "SUM", "AVG", "COUNT", "MIN", "MAX".
-- "group_by": The categorical/time column.
-- "title": A descriptive title.
-
-### EXAMPLE 1 (Greeting)
+### 🏆 GOLD STANDARD EXAMPLE (JSON)
+```json
 {{
-    "action": "answer",
-    "text": "### 👋 Hello!\\n\\nI am your Data Analyst. I am ready to help you explore **{table_name}**."
+  "action": "answer",
+  "text": "### 📊 Dataset Overview: **{table_name}** 🚀\\n\\nWelcome! ✨ I've analyzed your **data** and here is what I found:\\n\\n- 💎 **Total Rows**: Current dataset contains **1,240** records.\\n- 🎯 **Key Columns**: We have data on **Revenue**, **Region**, and **Customer Segment**.\\n- 💡 **Insight**: Most of your **sales** come from the **North** region during **Q3** 📈.\\n\\nHow can I help you visualize this **stunning data** today? ✨"
 }}
+```
 
-### EXAMPLE 2 (Stats)
+### OUTPUT FORMAT
+Output ONLY valid JSON. No preamble.
+
 {{
-    "action": "answer",
-    "text": "### 📊 Dataset Overview\\n\\nThe dataset **{table_name}** contains results."
+  "action": "create_chart" | "answer",
+  "text": "Your visually stunning, bold-heavy, and emoji-rich markdown response here",
+  "viz_type": "line" | "dist_bar" | "pie" | "big_number_total" (only if create_chart),
+  "metric": "column_name" | "count" (only if create_chart),
+  "agg_func": "SUM" | "AVG" | "COUNT" | "MIN" | "MAX" (only if create_chart),
+  "group_by": "column_name" | null (only if create_chart),
+  "title": "Descriptive Title" (only if create_chart)
 }}
-
-**Output VALID JSON only.**
-    '''
+'''
     
-    # Configure Gemini Model
-    model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL_ID,
-        system_instruction=system_instruction,
-        generation_config={"response_mime_type": "application/json"}
-    )
+    messages = [{"role": "system", "content": system_instruction}]
+    for msg in messages_history[-8:]:
+        messages.append({"role": msg["role"], "content": msg["content"]})
     
-    # Format chat history for Gemini
-    gemini_history = []
-    if messages_history:
-        for msg in messages_history[-5:]:
-             role = "user" if msg["role"] == "user" else "model"
-             gemini_history.append({"role": role, "parts": [msg["content"]]})
-             
-    final_prompt = f"{prompt}\n\nREMINDER: Reply with JSON only. If chatting, set 'action' to 'answer'."
+    messages.append({"role": "user", "content": f"{prompt}\n\nREMINDER: Reply with JSON only."})
 
     for attempt in range(retries):
         try:
-            # We can use start_chat to maintain history properly
-            chat = model.start_chat(history=gemini_history)
-            response = chat.send_message(final_prompt)
+            response = client.chat_completion(
+                model=LLAMA_MODEL_ID,
+                messages=messages,
+                max_tokens=800,
+                temperature=0.2
+            )
             
-            text = response.text.strip()
+            text = response.choices[0].message.content.strip()
+            
+            # Extract JSON object
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if match:
+                text = match.group(0)
             
             try:
-                # Since we forced application/json, it should be valid JSON
                 return json.loads(text)
             except json.JSONDecodeError:
-                # Just in case Gemini wrapped it in markdown anyway
-                if "viz_type" in text or '"action": "create_chart"' in text:
-                    # Manual extraction fallback
-                    chart_fallback = {"action": "create_chart"}
-                    viz_match = re.search(r'["\']viz_type["\']\s*:\s*["\'](.*?)["\']', text)
-                    chart_fallback["viz_type"] = viz_match.group(1) if viz_match else "dist_bar"
-                    title_match = re.search(r'["\']title["\']\s*:\s*["\'](.*?)["\']', text)
-                    chart_fallback["title"] = title_match.group(1) if title_match else "AI Generated Chart"
-                    metric_match = re.search(r'["\']metric["\']\s*:\s*["\'](.*?)["\']', text)
-                    chart_fallback["metric"] = metric_match.group(1) if metric_match else "count"
-                    agg_match = re.search(r'["\']agg_func["\']\s*:\s*["\'](.*?)["\']', text)
-                    chart_fallback["agg_func"] = agg_match.group(1) if agg_match else "SUM"
-                    grp_match = re.search(r'["\']group_by["\']\s*:\s*["\'](.*?)["\']', text)
-                    chart_fallback["group_by"] = grp_match.group(1) if grp_match else None
-                    return chart_fallback
-                    
                 if attempt == retries - 1:
                     return {"action": "answer", "text": text}
-                
-                final_prompt = "Previous response was not valid JSON. Please output VALID JSON only."
+                messages.append({"role": "assistant", "content": text})
+                messages.append({"role": "user", "content": "That was not valid JSON. Please provide ONLY the JSON object."})
                 continue
                 
         except Exception as e:
             if attempt == retries - 1:
-                return {"action": "answer", "text": f"Error interacting with Gemini: {e}"}
+                return {"action": "answer", "text": f"Error interacting with Llama 3: {e}"}
             time.sleep(1)
             
     return {"action": "answer", "text": "Failed to get response."}

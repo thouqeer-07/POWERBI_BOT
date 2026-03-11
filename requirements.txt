@@ -1,31 +1,25 @@
-Flask
+# Core API (FastAPI & Uvicorn)
 fastapi
 uvicorn
 python-multipart
-flask-appbuilder
+python-dotenv
+
+# AI & LLM
+google-generativeai
+huggingface_hub
+
+# Database & Data Processing
 pandas
 SQLAlchemy
-Jinja2
-numpy
+psycopg2-binary
+openpyxl
 pyarrow>=12.0.1
+
+# Utility & Standard
+requests
 python-dateutil
 pytz
-geopy
-WTForms>=3.0.1
-Flask-WTF
-marshmallow>=3.19.0
-streamlit>=1.47.0
-altair>=5.0
-werkzeug>=2.2.3
 typing-extensions
-requests
 certifi
 click
-huggingface_hub
-streamlit
-python-dotenv
-psycopg2-binary
-st-pages
 setuptools
-openpyxl
-google-generativeai

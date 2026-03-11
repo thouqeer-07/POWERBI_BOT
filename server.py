@@ -33,6 +33,15 @@ sup = SupersetClient(api_url=SUPERSET_URL, public_url=SUPERSET_PUBLIC_URL)
 
 # In-memory session state (simplification for prototype)
 # In production, use Redis or a database
+# Global mapping for visualization types
+VIZ_MAP = {
+    "dist_bar": "echarts_timeseries_bar", 
+    "bar": "echarts_timeseries_bar",
+    "line": "echarts_timeseries_line",
+    "pie": "pie",
+    "big_number_total": "big_number_total"
+}
+
 SESSIONS = {}
 
 @app.get("/health")
@@ -78,12 +87,86 @@ async def upload_file(file: UploadFile = File(...), table_name: str = Form(...))
             "session_id": session_id,
             "table_name": table_name,
             "dataset_id": dataset.get("id"),
-            "plan": plan
+            "plan": plan,
+            "columns": df.columns.tolist()
         }
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+def build_chart_params(dataset_id, chart_plan, actual_viz):
+    """
+    Consolidated helper to build Superset-compatible chart parameters.
+    Fixes common issues like Pie chart orderby and Big Number undefined.
+    """
+    params = {
+        "datasource": f"{dataset_id}__table",
+        "viz_type": actual_viz,
+    }
+
+    # Metric construction
+    metric_col = chart_plan.get("metric", "count")
+    agg = chart_plan.get("agg_func", "SUM").upper()
+    
+    # CRITICAL: Always use a structured metric object even for counts
+    # This prevents 'Field may not be null' errors in sorting/orderby
+    if str(metric_col).lower() == "count":
+        metric_obj = {
+            "expressionType": "SQL",
+            "sqlExpression": "COUNT(*)",
+            "label": "COUNT(*)"
+        }
+    else:
+        metric_col = str(metric_col)
+        if agg not in ["SUM", "AVG", "COUNT", "MAX", "MIN"]:
+            agg = "SUM"
+            
+        metric_obj = {
+            "expressionType": "SIMPLE", 
+            "column": {"column_name": metric_col}, 
+            "aggregate": agg, 
+            "label": f"{agg}({metric_col})"
+        }
+
+    # Superset handles metrics differently per viz type
+    params["metrics"] = [metric_obj]
+    
+    # Pie charts and some Big Number versions need a singular 'metric' field
+    if actual_viz in ["big_number_total", "pie"]:
+        params["metric"] = metric_obj 
+
+    # Handle Grouping
+    group_by = chart_plan.get("group_by")
+    if group_by:
+        if "echarts_timeseries" in actual_viz:
+            params["x_axis"] = group_by
+            # ONLY set time grain if it looks like a time dimension
+            is_temporal = any(k in str(group_by).lower() for k in ["date", "time", "year", "month", "day"])
+            if is_temporal:
+                params["time_grain_sqla"] = "P1D"
+            else:
+                # For categorical data on echarts_timeseries charts
+                params["time_grain_sqla"] = None
+                params["series_limit"] = 100 
+        
+        elif actual_viz == "pie":
+            params["groupby"] = [group_by]
+            # Use the EXACT same metric object for sorting
+            params["orderby"] = [[metric_obj, False]] 
+            params["timeseries_limit_metric"] = metric_obj
+        else:
+            params["groupby"] = [group_by]
+            params["orderby"] = [[metric_obj, False]]
+    
+    # Static parameters for ECharts plugins
+    if "echarts" in actual_viz:
+        params["y_axis_format"] = "SMART_NUMBER"
+        params["seriesType"] = "scatter" if actual_viz == "echarts_timeseries_scatter" else "line"
+        params["show_legend"] = True
+        params["rich_tooltip"] = True
+
+    return params
 
 @app.post("/create-dashboard")
 async def create_dashboard(session_id: str = Form(...), plan: str = Form(...)):
@@ -98,54 +181,22 @@ async def create_dashboard(session_id: str = Form(...), plan: str = Form(...)):
         
         created_chart_ids = []
         for chart in charts_plan:
-            # Mapping to actual Superset viz types
-            viz_map = {
-                "dist_bar": "echarts_timeseries_bar", 
-                "bar": "echarts_timeseries_bar",
-                "line": "echarts_timeseries_line",
-                "pie": "pie",
-                "big_number_total": "big_number_total"
-            }
-            actual_viz = viz_map.get(chart["viz_type"], chart["viz_type"])
-            
-            # Param construction
-            params = {
-                "datasource": f"{dataset_id}__table",
-                "viz_type": actual_viz,
-            }
-
-            # Metric logic
-            metric_col = chart["metric"]
-            if str(metric_col).lower() == "count":
-                params["metrics"] = ["count"]
-            else:
-                metric_obj = {
-                    "expressionType": "SIMPLE", 
-                    "column": {"column_name": metric_col}, 
-                    "aggregate": chart.get("agg_func", "SUM"), 
-                    "label": chart["title"]
-                }
-                params["metrics"] = [metric_obj]
-
-            # Handle Grouping
-            group_by = chart.get("group_by")
-            if group_by:
-                if actual_viz in ["echarts_timeseries_bar", "echarts_timeseries_line"]:
-                    # These newer ECharts plugins expect x_axis
-                    params["x_axis"] = group_by
-                    params["time_grain_sqla"] = "P1D" 
-                elif actual_viz == "pie":
-                    params["groupby"] = [group_by]
+            try:
+                # Mapping to actual Superset viz types
+                actual_viz = VIZ_MAP.get(chart["viz_type"], chart["viz_type"])
+                
+                # Use helper for param construction
+                params = build_chart_params(dataset_id, chart, actual_viz)
+                
+                print(f"DEBUG: Creating chart '{chart.get('title')}' with params: {params}")
+                c_resp = sup.create_chart(dataset_id, chart.get("title", "AI Chart"), actual_viz, params)
+                if c_resp and c_resp.get("id"):
+                    created_chart_ids.append(c_resp.get("id"))
                 else:
-                    params["groupby"] = [group_by]
-            
-            # Extra fields often needed by ECharts
-            if "echarts" in actual_viz:
-                params["y_axis_format"] = "SMART_NUMBER"
-                params["seriesType"] = "scatter" if actual_viz == "echarts_timeseries_scatter" else "line"
-            
-            c_resp = sup.create_chart(dataset_id, chart.get("title", "AI Chart"), actual_viz, params)
-            created_chart_ids.append(c_resp.get("id"))
+                    print(f"WARNING: Chart creation failed for '{chart.get('title')}': No ID returned")
+            except Exception as chart_err:
+                print(f"ERROR: Failed to create chart '{chart.get('title')}': {chart_err}")
+                continue
             
         dash_name = f"Dashboard - {table_name}"
         dash = sup.create_dashboard(dash_name)
@@ -237,61 +288,41 @@ async def chat(
         # Auto-create chart from chat if needed
         if result.get("action") == "create_chart" and dashboard_id:
             viz_type = result.get("viz_type", "dist_bar")
-            actual_viz = "echarts_timeseries_bar" if viz_type == "dist_bar" else ("echarts_timeseries_line" if viz_type == "line" else viz_type)
+            actual_viz = VIZ_MAP.get(viz_type, viz_type)
             if actual_viz == "pie": actual_viz = "pie"
             elif actual_viz == "big_number_total": actual_viz = "big_number_total"
             
-            params = {
-                "datasource": f"{dataset_id}__table",
-                "viz_type": actual_viz,
-            }
-
-            metric_col = result.get("metric", "count")
-            if str(metric_col).lower() == "count":
-                params["metrics"] = ["count"]
-            else:
-                metric_obj = {
-                    "expressionType": "SIMPLE", 
-                    "column": {"column_name": metric_col}, 
-                    "aggregate": result.get("agg_func", "SUM"), 
-                    "label": result.get("title", "AI Chart")
-                }
-                params["metrics"] = [metric_obj]
-
-            group_by = result.get("group_by")
-            if group_by:
-                if actual_viz in ["echarts_timeseries_bar", "echarts_timeseries_line"]:
-                    params["x_axis"] = group_by
-                    params["time_grain_sqla"] = "P1D" 
-                else:
-                    params["groupby"] = [group_by]
+            # Use helper for param construction
+            params = build_chart_params(dataset_id, result, actual_viz)
             
-            if "echarts" in actual_viz:
-                params["y_axis_format"] = "SMART_NUMBER"
-                params["seriesType"] = "scatter" if actual_viz == "echarts_timeseries_scatter" else "line"
-            
-            c_resp = sup.create_chart(dataset_id, result.get("title", "AI Chart"), actual_viz, params)
-            new_chart_id = c_resp.get("id")
-            
-            # Append to existing dashboard
-            sup.append_chart_to_dashboard(dashboard_id, new_chart_id)
-            
-            # Switch action so the frontend knows it was automatically added
-            result["action"] = "chart_added_to_dashboard"
-            result["text"] = f"### ✅ Chart Added!\n\nI have created the chart **{result.get('title')}** and added it to your dashboard."
-            result["chart_url"] = sup.chart_url(new_chart_id)
-            result["new_chart_id"] = new_chart_id # Pass this if needed
+            try:
+                print(f"DEBUG: Creating chat chart '{result.get('title')}'...")
+                c_resp = sup.create_chart(dataset_id, result.get("title", "AI Chart"), actual_viz, params)
+                new_chart_id = c_resp.get("id")
+                
+                # Append to existing dashboard
+                sup.append_chart_to_dashboard(dashboard_id, new_chart_id)
+                
+                # Switch action so the frontend knows it was automatically added
+                result["action"] = "chart_added_to_dashboard"
+                result["text"] = f"### ✅ Chart Added!\n\nI have created the chart **{result.get('title')}** and added it to your dashboard."
+                result["chart_url"] = sup.chart_url(new_chart_id)
+                result["new_chart_id"] = new_chart_id # Pass this if needed
+            except Exception as chart_err:
+                print(f"ERROR: Chat chart creation failed: {chart_err}")
+                result["action"] = "answer"
+                result["text"] = f"### ❌ Chart Creation Failed\n\nI tried to create the chart **{result.get('title')}**, but encountered an error: {str(chart_err)}"
         
         # Update history
         session["messages"].append({"role": "user", "content": prompt})
         
-        # Avoid empty content strings which crash Gemini
+        # Avoid empty content strings which crash Gemini or confuse Llama
         assistant_content = result.get("text")
         if not assistant_content:
             if result.get("action") == "create_chart":
-                assistant_content = f"I've planned a chart: {result.get('title', 'Chart')}"
+                assistant_content = f"### 📊 Chart Created: {result.get('title', 'AI Chart')}\n\nI have successfully planned a new visualization for you."
             else:
-                assistant_content = "Understood."
+                assistant_content = "### ✅ Request Processed\n\nI have processed your request. How else can I assist you with your data today? 🚀"
                 
         session["messages"].append({"role": "assistant", "content": assistant_content})
         

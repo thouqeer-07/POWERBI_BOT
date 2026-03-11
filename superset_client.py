@@ -784,15 +784,24 @@ class SupersetClient:
             
             cursor = conn.cursor()
 
-            # Check for existing slug first to avoid UniqueViolation
+            # Improved slug generation: lowercase, replace spaces/underscores, collapse multiple hyphens
+            import re
+            base_slug = dashboard_title.lower().replace(" ", "-").replace("_", "-")
+            base_slug = re.sub(r'-+', '-', base_slug).strip('-')
+            slug = base_slug
+
+            # Check for existing slug first to avoid unnecessary UniqueViolation
             check_sql = "SELECT id, dashboard_title FROM dashboards WHERE slug = %s"
             cursor.execute(check_sql, (slug,))
             existing = cursor.fetchone()
             if existing:
-                print(f"✅ Found existing dashboard with slug '{slug}' (ID: {existing[0]})")
-                cursor.close()
-                conn.close()
-                return {"id": existing[0], "dashboard_title": existing[1], "slug": slug}
+                # If titles don't match or it's a new session, we want a fresh one
+                # but for simplicity, let's append a hash if we want it to be unique
+                import random
+                import string
+                suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
+                slug = f"{base_slug}-{suffix}"
+                print(f"⚠️ Slug '{base_slug}' exists. Generated unique slug: '{slug}'")
 
             sql = """
             INSERT INTO dashboards (
@@ -805,20 +814,21 @@ class SupersetClient:
             # Minimal position_json
             position_json = json.dumps({"DASHBOARD_VERSION_KEY": "v2"})
 
-            
             try:
                 cursor.execute(sql, (dashboard_title, slug, published, dashboard_uuid, position_json))
                 dashboard_id = cursor.fetchone()[0]
                 conn.commit()
             except psycopg2.errors.UniqueViolation:
                 conn.rollback()
-                print(f"⚠️ UniqueViolation on slug '{slug}'. Fetching existing record...")
-                cursor.execute("SELECT id FROM dashboards WHERE slug = %s", (slug,))
-                row = cursor.fetchone()
-                if row:
-                    dashboard_id = row[0]
-                else:
-                    raise RuntimeError(f"UniqueViolation occurred but existing record for slug '{slug}' not found.")
+                # Second fallback: Append even more randomness
+                import random
+                import string
+                suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+                slug = f"{base_slug}-{suffix}"
+                print(f"⚠️ UniqueViolation on slug. Retrying with: '{slug}'")
+                cursor.execute(sql, (dashboard_title, slug, published, dashboard_uuid, position_json))
+                dashboard_id = cursor.fetchone()[0]
+                conn.commit()
             
             cursor.close()
             conn.close()

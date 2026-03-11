@@ -5,13 +5,43 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+const Typewriter = ({ text, speed = 2, onUpdate, onComplete }) => {
+    const [displayedText, setDisplayedText] = React.useState('');
+    const [index, setIndex] = React.useState(0);
+
+    React.useEffect(() => {
+        if (index < text.length) {
+            const timeout = setTimeout(() => {
+                const step = 10; // Reveal 10 characters at a time for "flash" speed
+                const nextIndex = Math.min(index + step, text.length);
+                setDisplayedText(text.substring(0, nextIndex));
+                setIndex(nextIndex);
+                if (onUpdate) onUpdate();
+            }, speed);
+            return () => clearTimeout(timeout);
+        } else if (onComplete) {
+            onComplete();
+        }
+    }, [index, text, speed, onUpdate, onComplete]);
+
+    return (
+        <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            className="prose prose-xs sm:prose-sm prose-slate max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-slate-100 prose-td:border prose-th:border prose-strong:text-slate-900 prose-strong:font-bold prose-headings:text-primary-800 prose-headings:font-black prose-li:my-1"
+        >
+            {displayedText}
+        </ReactMarkdown>
+    );
+};
+
 const ChatSection = ({
     sessionId,
     setDashboardUrl,
     messages,
     setMessages,
     currentPlan,
-    setCurrentPlan
+    setCurrentPlan,
+    columns = []
 }) => {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -202,7 +232,7 @@ const ChatSection = ({
             } else {
                 setMessages(prev => [...prev, {
                     role: 'assistant',
-                    content: data.text || 'I have processed your request.',
+                    content: data.text || 'I have analyzed your data and updated the view accordingly. 📊',
                     chart_url: data.chart_url
                 }]);
 
@@ -279,46 +309,46 @@ const ChatSection = ({
     }
 
     return (
-        <div className="flex flex-col h-full max-w-4xl mx-auto px-4 py-8 relative w-full">
-            {/* Added more bottom padding (pb-32) to prevent overlapping with the fixed input box */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-6 scrollbar-hide pb-32">
+        <div className="flex flex-col h-full max-w-4xl mx-auto px-4 py-2 relative w-full">
+            {/* Minimal bottom padding (pb-4) to keep content close to input */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 scrollbar-hide pb-4">
                 <AnimatePresence>
                     {messages.map((msg, idx) => (
                         <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             key={idx}
-                            className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+                            className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                         >
-                            <div className={`h-10 w-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border ${msg.role === 'user'
+                            <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm border ${msg.role === 'user'
                                 ? 'bg-primary-600 border-primary-500 text-white'
                                 : 'bg-white border-slate-200 text-primary-600'
                                 }`}>
-                                {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
+                                {msg.role === 'user' ? <User size={18} /> : <Bot size={18} />}
                             </div>
-                            <div className={`max-w-[80%] space-y-2`}>
-                                <div className={`px-5 py-3 rounded-2xl shadow-sm text-sm leading-relaxed ${msg.role === 'user'
-                                    ? 'bg-primary-600 text-white'
-                                    : 'bg-white border border-slate-200 text-slate-700 w-full overflow-hidden'
+                            <div className={`max-w-[85%] space-y-1`}>
+                                <div className={`px-4 py-3 rounded-2xl shadow-sm text-[13px] leading-relaxed ${msg.role === 'user'
+                                    ? 'bg-primary-600 text-white shadow-primary-500/10'
+                                    : 'bg-white border border-slate-100 text-slate-700 w-full overflow-hidden shadow-slate-200/50'
                                     }`}>
                                     {msg.isPlan ? (
-                                        <div className="space-y-4 w-full">
+                                        <div className="space-y-3 w-full">
                                             {msg.isDone ? (
-                                                <div className="space-y-4 py-2">
-                                                    <div className="flex items-center gap-3 text-emerald-600">
-                                                        <div className="h-10 w-10 bg-emerald-100 rounded-xl flex items-center justify-center">
-                                                            <Bot size={24} />
+                                                <div className="space-y-3 py-1">
+                                                    <div className="flex items-center gap-2 text-emerald-600">
+                                                        <div className="h-8 w-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                                                            <Bot size={20} />
                                                         </div>
                                                         <div>
-                                                            <h3 className="font-bold text-lg">Dashboard Created!</h3>
-                                                            <p className="text-xs text-emerald-600/70 font-medium">Successfully deployed to Superset</p>
+                                                            <h3 className="font-bold text-base">Dashboard Created!</h3>
+                                                            <p className="text-[10px] text-emerald-600/70 font-medium uppercase tracking-wider">Successfully deployed</p>
                                                         </div>
                                                     </div>
                                                     <p className="text-sm text-slate-600">
                                                         Your custom dashboard is now ready. You can interact with it in the <strong>Data Insight Dashboard</strong> tab.
                                                     </p>
                                                     {msg.chart_url && (
-                                                        <div className={fullScreenIdx === idx ? "fixed inset-0 z-50 flex flex-col bg-slate-100 p-2 md:p-6" : "rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white p-2 relative group"}>
+                                                        <div className={fullScreenIdx === idx ? "fixed inset-0 z-50 flex flex-col bg-slate-100 p-2 md:p-6" : "rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-white p-2 relative group"}>
                                                             {fullScreenIdx === idx ? (
                                                                 <div className="flex justify-between items-center mb-4 bg-white p-4 rounded-xl shadow-sm shrink-0">
                                                                     <h3 className="font-bold text-lg text-slate-800">Full Screen Dashboard</h3>
@@ -347,104 +377,119 @@ const ChatSection = ({
                                                     )}
 
                                                     {!msg.isAccepted ? (
-                                                        <div className="flex gap-3 pt-2">
+                                                        <div className="flex gap-2 pt-1">
                                                             <button
                                                                 onClick={() => handleRejectDashboard(idx, msg.dashboard_id)}
-                                                                className="flex-1 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 py-2.5 rounded-xl font-bold transition-all text-sm"
+                                                                className="flex-1 bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 py-2 rounded-xl font-bold transition-all text-xs"
                                                             >
                                                                 Reject & Edit Plan
                                                             </button>
                                                             <button
                                                                 onClick={() => handleAcceptDashboard(idx)}
-                                                                className="flex-1 bg-emerald-600 border border-emerald-600 text-white hover:bg-emerald-700 py-2.5 rounded-xl font-bold transition-all shadow-md shadow-emerald-500/20 text-sm"
+                                                                className="flex-1 bg-emerald-600 border border-emerald-600 text-white hover:bg-emerald-700 py-2 rounded-xl font-bold transition-all shadow-md shadow-emerald-500/20 text-xs"
                                                             >
                                                                 Accept Dashboard
                                                             </button>
                                                         </div>
                                                     ) : (
-                                                        <div className="flex items-center justify-center gap-2 text-emerald-600 text-sm font-bold bg-emerald-50 w-full py-3 rounded-xl border border-emerald-100">
-                                                            <CheckCircle2 size={18} />
+                                                        <div className="flex items-center justify-center gap-2 text-emerald-600 text-xs font-bold bg-emerald-50 w-full py-2.5 rounded-xl border border-emerald-100">
+                                                            <CheckCircle2 size={16} />
                                                             Dashboard Accepted
                                                         </div>
                                                     )}
                                                 </div>
                                             ) : msg.isCreating ? (
-                                                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                                                    <Loader2 className="animate-spin text-primary-600" size={40} />
+                                                <div className="flex flex-col items-center justify-center py-8 space-y-3">
+                                                    <Loader2 className="animate-spin text-primary-600" size={32} />
                                                     <div className="text-center">
-                                                        <p className="font-bold text-slate-800">Creating Dashboard...</p>
-                                                        <p className="text-xs text-slate-500">Connecting to Superset & generating charts</p>
+                                                        <p className="font-bold text-slate-800 text-sm">Creating Dashboard...</p>
+                                                        <p className="text-[10px] text-slate-500">Connecting to Superset</p>
                                                     </div>
                                                 </div>
                                             ) : (
                                                 <>
                                                     <div className="flex items-center justify-between">
                                                         <div className="flex items-center gap-2 text-primary-600">
-                                                            <Bot size={20} />
-                                                            <h3 className="font-bold text-lg">Dashboard Plan</h3>
+                                                            <Bot size={18} />
+                                                            <h3 className="font-bold text-base">Dashboard Plan</h3>
                                                         </div>
                                                         <button
                                                             onClick={addPlanItem}
-                                                            className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg font-bold transition-colors"
+                                                            className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-lg font-bold transition-colors"
                                                         >
-                                                            + Add Chart
+                                                            + Add
                                                         </button>
                                                     </div>
-                                                    <p className="text-sm text-slate-600">You can customize the plan before creating the dashboard:</p>
-                                                    <div className="space-y-3">
+                                                    <div className="space-y-2">
                                                         {currentPlan.map((item, idx) => (
-                                                            <div key={idx} className="group relative bg-slate-50 border border-slate-200 p-4 rounded-xl hover:border-primary-200 transition-all shadow-sm">
+                                                            <div key={idx} className="group relative bg-slate-50 border border-slate-200 p-3 rounded-xl hover:border-primary-200 transition-all shadow-sm">
                                                                 <button
                                                                     onClick={() => removePlanItem(idx)}
-                                                                    className="absolute -top-2 -right-2 h-6 w-6 bg-rose-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-rose-600"
+                                                                    className="absolute -top-1.5 -right-1.5 h-5 w-5 bg-rose-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-rose-600"
                                                                 >
-                                                                    <span className="text-lg leading-none">&times;</span>
+                                                                    <span className="text-base leading-none">&times;</span>
                                                                 </button>
 
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                    <div className="space-y-1">
-                                                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Title</label>
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
+                                                                    <div className="space-y-0.5">
+                                                                        <label className="text-[9px] font-bold text-slate-400 uppercase">Title</label>
                                                                         <input
                                                                             type="text"
                                                                             value={item.title}
                                                                             onChange={(e) => updatePlanItem(idx, 'title', e.target.value)}
-                                                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 ring-primary-500/10 focus:border-primary-500"
+                                                                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:ring-2 ring-primary-500/10 focus:border-primary-500"
                                                                         />
                                                                     </div>
-                                                                    <div className="space-y-1">
-                                                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Viz Type</label>
+                                                                    <div className="space-y-0.5">
+                                                                        <label className="text-[9px] font-bold text-slate-400 uppercase">Viz</label>
                                                                         <select
                                                                             value={item.viz_type}
                                                                             onChange={(e) => updatePlanItem(idx, 'viz_type', e.target.value)}
-                                                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 ring-primary-500/10 focus:border-primary-500"
+                                                                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:ring-2 ring-primary-500/10 focus:border-primary-500"
                                                                         >
-                                                                            <option value="dist_bar">Bar Chart</option>
-                                                                            <option value="line">Line Chart</option>
-                                                                            <option value="pie">Pie Chart</option>
-                                                                            <option value="big_number_total">Big Number</option>
+                                                                            <option value="dist_bar">Bar</option>
+                                                                            <option value="line">Line</option>
+                                                                            <option value="pie">Pie</option>
+                                                                            <option value="big_number_total">Number</option>
                                                                         </select>
                                                                     </div>
-                                                                    <div className="space-y-1">
-                                                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Metric</label>
-                                                                        <input
-                                                                            type="text"
+                                                                </div>
+
+                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                                                    <div className="space-y-0.5">
+                                                                        <label className="text-[9px] font-bold text-slate-400 uppercase">Metric</label>
+                                                                        <select
                                                                             value={item.metric}
                                                                             onChange={(e) => updatePlanItem(idx, 'metric', e.target.value)}
-                                                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 ring-primary-500/10 focus:border-primary-500"
-                                                                        />
+                                                                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:ring-2 ring-primary-500/10 focus:border-primary-500"
+                                                                        >
+                                                                            <option value="count">Count (*)</option>
+                                                                            {columns.map(col => <option key={col} value={col}>{col}</option>)}
+                                                                        </select>
                                                                     </div>
-                                                                    <div className="space-y-1">
-                                                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Aggregation</label>
+                                                                    <div className="space-y-0.5">
+                                                                        <label className="text-[9px] font-bold text-slate-400 uppercase">Agg</label>
                                                                         <select
                                                                             value={item.agg_func}
                                                                             onChange={(e) => updatePlanItem(idx, 'agg_func', e.target.value)}
-                                                                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 ring-primary-500/10 focus:border-primary-500"
+                                                                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:ring-2 ring-primary-500/10 focus:border-primary-500"
                                                                         >
-                                                                            <option value="SUM">Sum</option>
-                                                                            <option value="AVG">Average</option>
-                                                                            <option value="COUNT">Count</option>
-                                                                            <option value="MAX">Max</option>
-                                                                            <option value="MIN">Min</option>
+                                                                            <option value="SUM">SUM</option>
+                                                                            <option value="AVG">AVG</option>
+                                                                            <option value="COUNT">COUNT</option>
+                                                                            <option value="MIN">MIN</option>
+                                                                            <option value="MAX">MAX</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div className="space-y-0.5">
+                                                                        <label className="text-[9px] font-bold text-slate-400 uppercase">Group By</label>
+                                                                        <select
+                                                                            value={item.group_by || ''}
+                                                                            onChange={(e) => updatePlanItem(idx, 'group_by', e.target.value || null)}
+                                                                            className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:ring-2 ring-primary-500/10 focus:border-primary-500 font-medium"
+                                                                        >
+                                                                            <option value="">None</option>
+                                                                            {columns.map(col => <option key={col} value={col}>{col}</option>)}
                                                                         </select>
                                                                     </div>
                                                                 </div>
@@ -452,33 +497,49 @@ const ChatSection = ({
                                                         ))}
                                                     </div>
                                                     {msg.error && (
-                                                        <p className="text-xs text-rose-500 font-medium">Sorry, I encountered an error creating the dashboard. Please try again.</p>
+                                                        <p className="text-[10px] text-rose-500 font-medium">Error creating dashboard. Try again.</p>
                                                     )}
                                                     <button
                                                         onClick={() => handleCreateDashboard()}
                                                         disabled={currentPlan.length === 0}
-                                                        className="w-full bg-primary-600 text-white py-3 rounded-xl font-bold hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20 active:scale-95 flex items-center justify-center gap-2 disabled:bg-slate-300 disabled:shadow-none"
+                                                        className="w-full bg-primary-600 text-white py-2.5 rounded-xl font-bold hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20 active:scale-95 flex items-center justify-center gap-2 disabled:bg-slate-300 disabled:shadow-none text-sm"
                                                     >
                                                         Create Dashboard
                                                     </button>
-                                                </>
+                                                 </>
                                             )}
                                         </div>
                                     ) : (
                                         msg.role === 'user' ? (
                                             msg.content
                                         ) : (
-                                            <ReactMarkdown
-                                                remarkPlugins={[remarkGfm]}
-                                                className="prose prose-sm prose-slate max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-slate-100 prose-td:border prose-th:border"
-                                            >
-                                                {msg.content}
-                                            </ReactMarkdown>
+                                            msg.content && (idx === messages.length - 1 && msg.role === 'assistant' && !msg.isPlan && !msg.isTyped) ? (
+                                                <Typewriter
+                                                    text={msg.content}
+                                                    onUpdate={() => {
+                                                        if (scrollRef.current) {
+                                                            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                                                        }
+                                                    }}
+                                                    onComplete={() => {
+                                                        const newMessages = [...messages];
+                                                        newMessages[idx].isTyped = true;
+                                                        setMessages(newMessages);
+                                                    }}
+                                                />
+                                            ) : (
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    className="prose prose-xs sm:prose-sm prose-slate max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-slate-100 prose-td:border prose-th:border prose-p:my-1 prose-headings:my-2 prose-headings:text-primary-800 prose-headings:font-black prose-strong:text-slate-900 prose-strong:font-bold prose-ul:my-2 prose-li:my-1"
+                                                >
+                                                    {msg.content}
+                                                </ReactMarkdown>
+                                            )
                                         )
                                     )}
                                 </div>
                                 {msg.chart_url && !msg.isPlan && (
-                                    <div className={fullScreenIdx === idx ? "fixed inset-0 z-50 flex flex-col bg-slate-100 p-2 md:p-6" : "rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white p-2 relative group"}>
+                                    <div className={fullScreenIdx === idx ? "fixed inset-0 z-50 flex flex-col bg-slate-100 p-2 md:p-6" : "rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-white p-2 relative group mt-1"}>
                                         {fullScreenIdx === idx ? (
                                             <div className="flex justify-between items-center mb-4 bg-white p-4 rounded-xl shadow-sm shrink-0">
                                                 <h3 className="font-bold text-lg text-slate-800">Full Screen Dashboard</h3>
@@ -500,7 +561,7 @@ const ChatSection = ({
                                         )}
                                         <iframe
                                             src={`${msg.chart_url}${msg.chart_url.includes('?') ? '&' : '?'}standalone=true&show_filters=0&expand_filters=0`}
-                                            className={fullScreenIdx === idx ? "w-full flex-1 rounded-xl bg-white" : "w-full min-h-[500px] h-[60vh] rounded-xl bg-slate-50"}
+                                            className={fullScreenIdx === idx ? "w-full flex-1 rounded-xl bg-white" : "w-full min-h-[400px] h-[50vh] rounded-xl bg-slate-50"}
                                             title="Dashboard Preview"
                                         />
                                     </div>
@@ -510,11 +571,11 @@ const ChatSection = ({
                     ))}
                 </AnimatePresence>
                 {isLoading && (
-                    <div className="flex gap-4">
-                        <div className="h-10 w-10 rounded-2xl bg-white border border-slate-200 text-primary-600 flex items-center justify-center shadow-sm">
-                            <Loader2 className="animate-spin" size={20} />
+                    <div className="flex gap-3">
+                        <div className="h-9 w-9 rounded-xl bg-white border border-slate-200 text-primary-600 flex items-center justify-center shadow-sm">
+                            <Loader2 className="animate-spin" size={18} />
                         </div>
-                        <div className="bg-white border border-slate-200 px-5 py-3 rounded-2xl shadow-sm">
+                        <div className="bg-white border border-slate-200 px-4 py-2 rounded-2xl shadow-sm">
                             <div className="flex gap-1">
                                 <div className="h-1.5 w-1.5 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                                 <div className="h-1.5 w-1.5 bg-slate-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -525,10 +586,10 @@ const ChatSection = ({
                 )}
             </div>
 
-            <div className="pt-4 mt-auto">
+            <div className="pt-2 mt-auto">
                 <form
                     onSubmit={handleSend}
-                    className="relative flex items-center bg-white border border-slate-200 rounded-2xl shadow-xl p-2 pl-4 focus-within:ring-2 ring-primary-500/20 ring-offset-0 transition-all"
+                    className="relative flex items-center bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 pl-4 focus-within:ring-2 ring-primary-500/20 ring-offset-0 transition-all"
                 >
                     <input
                         type="text"
@@ -536,18 +597,18 @@ const ChatSection = ({
                         onChange={(e) => setInput(e.target.value)}
                         placeholder={sessionId ? "Ask about your data..." : "Upload a dataset to begin..."}
                         disabled={!sessionId || isLoading}
-                        className="flex-1 bg-transparent py-3 focus:outline-none text-slate-700 disabled:opacity-50"
+                        className="flex-1 bg-transparent py-2.5 focus:outline-none text-slate-700 disabled:opacity-50 text-sm"
                     />
                     <button
                         type="submit"
                         disabled={!sessionId || isLoading || !input.trim()}
-                        className="bg-primary-600 text-white h-11 w-11 rounded-xl flex items-center justify-center shadow-lg shadow-primary-500/30 hover:bg-primary-700 disabled:bg-slate-200 disabled:shadow-none transition-all active:scale-95"
+                        className="bg-primary-600 text-white h-10 w-10 rounded-xl flex items-center justify-center shadow-lg shadow-primary-500/30 hover:bg-primary-700 disabled:bg-slate-200 disabled:shadow-none transition-all active:scale-95"
                     >
                         <Send size={18} />
                     </button>
                 </form>
-                <p className="text-[10px] text-center mt-3 text-slate-400 font-medium">
-                    Powered by Enterprise AI • Secure Data Processing • Restricted Access
+                <p className="text-[10px] text-center mt-2 text-slate-400 font-medium">
+                    Powered by Enterprise AI • Secure Data Processing
                 </p>
             </div>
         </div>
