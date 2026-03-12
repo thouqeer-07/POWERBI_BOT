@@ -1266,8 +1266,50 @@ class SupersetClient:
             if conn:
                 conn.rollback()
                 conn.close()
-            raise RuntimeError(f"Database dashboard deletion failed: {str(e)}")
+    def delete_dataset(self, dataset_id):
+        """Delete a dataset by ID."""
+        try:
+            resp = self._request("DELETE", f"api/v1/dataset/{dataset_id}", timeout=30)
+            if resp.ok:
+                print(f"✅ Dataset {dataset_id} deleted via API.")
+                return True
+        except Exception as e:
+            print(f"API dataset deletion failed: {e}. Trying database-direct method...")
         
+        # Fallback
+        return self._delete_dataset_direct(dataset_id)
+
+    def _delete_dataset_direct(self, dataset_id):
+        """Delete dataset via direct database deletion"""
+        try:
+            import psycopg2
+        except ImportError:
+            raise RuntimeError("psycopg2 not installed")
+        
+        conn = None
+        metadata_db_uri = self._get_conf("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        try:
+            print(f"Deleting dataset {dataset_id} via database...")
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
+            cursor = conn.cursor()
+            
+            # Delete dataset
+            cursor.execute("DELETE FROM tables WHERE id = %s", (int(dataset_id),))
+            
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            print(f"✅ Dataset {dataset_id} deleted via database")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Database dataset deletion failed: {type(e).__name__}: {str(e)}")
+            if conn:
+                conn.rollback()
+                conn.close()
+            return False
+
     def get_columns(self, dataset_id):
         """Get list of columns for a dataset."""
         try:

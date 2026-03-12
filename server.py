@@ -233,6 +233,16 @@ async def get_datasets():
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/datasets/{dataset_id}")
+async def delete_dataset(dataset_id: int):
+    try:
+        sup.delete_dataset(dataset_id)
+        return {"result": "success"}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/datasets/{dataset_id}/data")
 async def get_dataset_data(dataset_id: int):
     try:
