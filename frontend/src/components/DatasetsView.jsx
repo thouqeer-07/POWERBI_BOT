@@ -12,6 +12,7 @@ const DatasetsView = () => {
     const [previewLoading, setPreviewLoading] = useState(false);
     const [datasetToDelete, setDatasetToDelete] = useState(null);
     const [deleteConfirmText, setDeleteConfirmText] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         fetchDatasets();
@@ -44,6 +45,7 @@ const DatasetsView = () => {
     };
 
     const handleDeleteDataset = async (datasetId) => {
+        setIsDeleting(true);
         try {
             const response = await fetch(`http://localhost:8001/datasets/${datasetId}`, {
                 method: 'DELETE',
@@ -58,6 +60,8 @@ const DatasetsView = () => {
         } catch (error) {
             console.error('Error deleting dataset:', error);
             alert('Error connecting to server.');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -306,10 +310,17 @@ const DatasetsView = () => {
                                 </button>
                                 <button
                                     onClick={() => handleDeleteDataset(datasetToDelete.id)}
-                                    disabled={deleteConfirmText !== 'DELETE'}
-                                    className="flex-1 py-2.5 bg-rose-600 text-white font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-lg shadow-rose-500/20 shadow-none disabled:shadow-none"
+                                    disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+                                    className="flex-1 py-2.5 flex items-center justify-center gap-2 bg-rose-600 text-white font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-lg shadow-rose-500/20 disabled:shadow-none"
                                 >
-                                    Confirm Delete
+                                    {isDeleting ? (
+                                        <>
+                                            <RefreshCw className="animate-spin" size={16} />
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        'Confirm Delete'
+                                    )}
                                 </button>
                             </div>
                         </div>
