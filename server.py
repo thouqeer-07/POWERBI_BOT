@@ -236,7 +236,21 @@ async def get_datasets():
 @app.delete("/datasets/{dataset_id}")
 async def delete_dataset(dataset_id: int):
     try:
+        # Get the table name before deleting from Superset
+        datasets = sup.list_datasets()
+        target_ds = next((ds for ds in datasets if str(ds.get("id")) == str(dataset_id)), None)
+        table_name = target_ds.get("table_name") if target_ds else None
+        
+        # Delete from Superset
         sup.delete_dataset(dataset_id)
+        
+        # Delete from DB (Supabase/Postgres)
+        if table_name:
+            from sqlalchemy import create_engine, text
+            engine = create_engine(DB_URI)
+            with engine.begin() as conn:
+                conn.execute(text(f'DROP TABLE IF EXISTS "{table_name}" CASCADE'))
+                
         return {"result": "success"}
     except Exception as e:
         import traceback
