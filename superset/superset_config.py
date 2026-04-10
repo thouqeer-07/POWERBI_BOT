@@ -1,7 +1,12 @@
 import os
+from flask_babel import lazy_gettext as _
 
 # Database
-SQLALCHEMY_DATABASE_URI = os.getenv("SUPERSET_DB_URI", "").strip() or None
+SQLALCHEMY_DATABASE_URI = os.getenv("SUPERSET_DB_URI", "").strip()
+if SQLALCHEMY_DATABASE_URI and not SQLALCHEMY_DATABASE_URI.startswith("postgresql+psycopg2://"):
+    SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace("postgresql://", "postgresql+psycopg2://")
+
+print(f"DEBUG: Superset using DB URI: {SQLALCHEMY_DATABASE_URI.split('@')[1] if SQLALCHEMY_DATABASE_URI and '@' in SQLALCHEMY_DATABASE_URI else 'MISSING'}")
 
 # Security
 SECRET_KEY = os.getenv("SUPERSET_SECRET_KEY", "").strip() or None
@@ -20,6 +25,8 @@ FEATURE_FLAGS = {
     "DASHBOARD_CACHE_FOR_USER": True,
     "ENABLE_EMBEDDED_RESOURCE_ACCESS_CONTROL": True, 
 }
+BABEL_DEFAULT_TIMEZONE = "Asia/Kolkata"
+BABEL_DEFAULT_LOCALE = "en"
 GUEST_TOKEN_JWT_EXP_SECONDS = 3600 # 1 hour
 
 # --- Caching Optimization (Redis) ---

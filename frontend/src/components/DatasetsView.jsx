@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 
 import { Database, Search, Calendar, Table as TableIcon, RefreshCw, ExternalLink, Trash2, X } from 'lucide-react';
 
-const DatasetsView = () => {
+const DatasetsView = ({ userId, onDatasetDeleted }) => {
     const [datasets, setDatasets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -20,8 +20,13 @@ const DatasetsView = () => {
 
     const fetchDatasets = async () => {
         setLoading(true);
+        const token = localStorage.getItem('token');
         try {
-            const response = await fetch('http://localhost:8001/datasets');
+            const response = await fetch(`http://localhost:8001/datasets`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
             const data = await response.json();
             setDatasets(data);
         } catch (error) {
@@ -33,8 +38,13 @@ const DatasetsView = () => {
 
     const fetchPreviewData = async (datasetId) => {
         setPreviewLoading(true);
+        const token = localStorage.getItem('token');
         try {
-            const response = await fetch(`http://localhost:8001/datasets/${datasetId}/data`);
+            const response = await fetch(`http://localhost:8001/datasets/${datasetId}/data`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
             const data = await response.json();
             setPreviewData(data);
         } catch (error) {
@@ -46,14 +56,24 @@ const DatasetsView = () => {
 
     const handleDeleteDataset = async (datasetId) => {
         setIsDeleting(true);
+        const token = localStorage.getItem('token');
+
         try {
             const response = await fetch(`http://localhost:8001/datasets/${datasetId}`, {
                 method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
             });
             if (response.ok) {
                 setDatasets(prev => prev.filter(ds => ds.id !== datasetId));
                 setDatasetToDelete(null);
                 setDeleteConfirmText('');
+                
+                // --- NEW: Notify parent of deletion for state cleanup ---
+                if (onDatasetDeleted) {
+                    onDatasetDeleted(datasetId);
+                }
             } else {
                 alert('Failed to delete dataset registration.');
             }
@@ -77,7 +97,7 @@ const DatasetsView = () => {
     };
 
     const filteredDatasets = datasets.filter(ds =>
-        ds.table_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (ds.display_name || ds.table_name)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         ds.schema?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -142,7 +162,9 @@ const DatasetsView = () => {
                                     <Database size={24} />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <h3 className="font-bold text-slate-900 truncate pr-6 group-hover:text-primary-700 transition-colors">{ds.table_name || 'Unnamed Dataset'}</h3>
+                                    <h3 className="font-bold text-slate-900 truncate pr-6 group-hover:text-primary-700 transition-colors">
+                                        {ds.display_name || (ds.table_name?.startsWith('u_') ? ds.table_name.split('_').slice(2).join('_') : ds.table_name) || 'Unnamed Dataset'}
+                                    </h3>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{ds.schema || 'public'}</span>
                                 </div>
                             </div>
@@ -152,7 +174,7 @@ const DatasetsView = () => {
                                     <div className="h-5 w-5 rounded-md bg-slate-50 flex items-center justify-center">
                                         <TableIcon size={14} className="text-slate-400" />
                                     </div>
-                                    <span className="font-medium text-slate-500">ID: {ds.id}</span>
+                                    <span className="font-medium text-slate-500">Source: Standard Table</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-slate-600">
                                     <div className="h-5 w-5 rounded-md bg-slate-50 flex items-center justify-center">
@@ -205,7 +227,9 @@ const DatasetsView = () => {
                                     <Database size={20} />
                                 </div>
                                 <div>
-                                    <h2 className="text-xl font-bold text-slate-900 tracking-tight">{selectedDataset.table_name}</h2>
+                                    <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+                                        {selectedDataset.display_name || (selectedDataset.table_name?.startsWith('u_') ? selectedDataset.table_name.split('_').slice(2).join('_') : selectedDataset.table_name)}
+                                    </h2>
                                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Data Preview • {previewData?.rows?.length || 0} rows shown</p>
                                 </div>
                             </div>
@@ -287,7 +311,7 @@ const DatasetsView = () => {
                         
                         <div className="space-y-4">
                             <p className="text-sm text-slate-600 leading-relaxed">
-                                You are about to delete <strong>{datasetToDelete.table_name}</strong>. This action cannot be undone. 
+                                You are about to delete <strong>{datasetToDelete.display_name || (datasetToDelete.table_name?.startsWith('u_') ? datasetToDelete.table_name.split('_').slice(2).join('_') : datasetToDelete.table_name)}</strong>. This action cannot be undone. 
                                 <br /><br />
                                 Please type <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">DELETE</span> to confirm.
                             </p>

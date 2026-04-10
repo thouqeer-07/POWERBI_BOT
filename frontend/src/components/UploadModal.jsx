@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Upload, FileText, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 
-const UploadModal = ({ onClose, onSuccess }) => {
+const UploadModal = ({ onClose, onSuccess, userId }) => {
     const [file, setFile] = useState(null);
     const [tableName, setTableName] = useState('');
     const [status, setStatus] = useState('idle'); // idle, uploading, success, error
@@ -15,9 +15,15 @@ const UploadModal = ({ onClose, onSuccess }) => {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('table_name', tableName);
+        formData.append('user_id', userId);
 
         try {
-            const response = await axios.post('http://localhost:8001/upload', formData);
+            const token = localStorage.getItem('token');
+            const response = await axios.post('http://localhost:8001/upload', formData, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
             setStatus('success');
             setTimeout(() => {
                 onSuccess(response.data);
@@ -77,6 +83,7 @@ const UploadModal = ({ onClose, onSuccess }) => {
                             placeholder="e.g. sales_data_2024"
                         />
                     </div>
+
 
                     {status === 'error' && (
                         <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-100 rounded-xl text-rose-600">

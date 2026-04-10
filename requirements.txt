@@ -1,21 +1,16 @@
-# Core API (FastAPI & Uvicorn)
 fastapi
 uvicorn
 python-multipart
 python-dotenv
-
-# AI & LLM
+python-jose[cryptography]
+bcrypt
 google-generativeai
 huggingface_hub
-
-# Database & Data Processing
 pandas
 SQLAlchemy
 psycopg2-binary
 openpyxl
 pyarrow>=12.0.1
-
-# Utility & Standard
 requests
 python-dateutil
 pytz

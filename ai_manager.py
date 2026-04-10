@@ -9,9 +9,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialize Hugging Face Client
+# HF CLIENT
 HF_TOKEN = os.getenv("HUGGINGFACE_TOKEN")
-# We use Llama 3 8B Instruct as the default powerful balanced model
+# LLAMA 3 - POWERFUL & BALANCED
 LLAMA_MODEL_ID = "meta-llama/Meta-Llama-3-8B-Instruct"
 
 client = None
@@ -33,7 +33,7 @@ def get_llama_suggestions(df_serialized, table_name, retries=3):
         print("WARNING: HUGGINGFACE_TOKEN not set. AI suggestions disabled.")
         return []
         
-    # Prepare column info
+    # COL INFO
     col_info = []
     for col in df.columns:
         dtype = str(df[col].dtype)
@@ -61,7 +61,8 @@ CRITICAL INSTRUCTIONS:
 3. "agg_func" MUST be one of: ["SUM", "AVG", "COUNT", "MAX", "MIN"].
 4. Ensure "metric" is a numeric column (or "count").
 5. "group_by" should be a categorical or date column. For "big_number_total", set "group_by" to null.
-6. valid JSON only. No conversation, no explanations.
+6. MANDATORY: Use the exact column names provided in the context below. Do not assume or change them.
+7. valid JSON only. No conversation, no explanations.
 
 Example JSON output structure:
 [
@@ -94,7 +95,7 @@ Example JSON output structure:
             
             text = response.choices[0].message.content.strip()
             
-            # Extract JSON array using regex in case Llama adds extra text
+            # GET JSON ARRAY
             match = re.search(r'\[.*\]', text, re.DOTALL)
             if match:
                 text = match.group(0)
@@ -113,10 +114,14 @@ Example JSON output structure:
                 if p["agg_func"] not in ["SUM", "AVG", "COUNT", "MAX", "MIN"]:
                     p["agg_func"] = "COUNT"
                 
-                raw_metric = p.get("metric")
+                raw_metric = str(p.get("metric", "")).strip()
                 if raw_metric:
-                    matches = difflib.get_close_matches(raw_metric, list(valid_cols), n=1, cutoff=0.7)
-                    if matches: p["metric"] = matches[0]
+                    # Case-insensitive robust matching
+                    matches = difflib.get_close_matches(raw_metric.lower(), [c.lower() for c in valid_cols], n=1, cutoff=0.7)
+                    if matches:
+                        # Map back to EXACT original casing in valid_cols
+                        idx = [c.lower() for c in valid_cols].index(matches[0])
+                        p["metric"] = list(valid_cols)[idx]
                     elif raw_metric.lower() == "count": p["metric"] = "count"
                     else: p["metric"] = "count"
                 else: p["metric"] = "count"
@@ -124,12 +129,16 @@ Example JSON output structure:
                 if p["metric"] != "count" and p["metric"] not in numeric_cols and p["agg_func"] in ["SUM", "AVG"]:
                      p["agg_func"] = "COUNT"
 
-                raw_group = p.get("group_by")
-                if str(raw_group).lower() in ["null", "none", ""]:
+                raw_group = str(p.get("group_by", "")).strip()
+                if raw_group.lower() in ["null", "none", "", "nan"]:
                     p["group_by"] = None
                 elif raw_group:
-                     matches = difflib.get_close_matches(raw_group, list(valid_cols), n=1, cutoff=0.7)
-                     if matches: p["group_by"] = matches[0]
+                     # Case-insensitive robust matching
+                     matches = difflib.get_close_matches(raw_group.lower(), [c.lower() for c in valid_cols], n=1, cutoff=0.7)
+                     if matches:
+                         # Map back to EXACT original casing in valid_cols
+                         idx = [c.lower() for c in valid_cols].index(matches[0])
+                         p["group_by"] = list(valid_cols)[idx]
                      else: p["group_by"] = None
                 
                 if p["viz_type"] == "line":
@@ -156,6 +165,91 @@ Example JSON output structure:
                 return []
             time.sleep(2)
     return []
+
+def get_quick_insights(df_serialized, table_name, retries=3):
+    """Generate the top 3 trends and top 2 anomalies for a dataset."""
+    import pandas as pd
+    
+    if isinstance(df_serialized, str):
+        df = pd.read_json(df_serialized)
+    else:
+        df = df_serialized
+
+    if not client:
+        return {"trends": [], "anomalies": []}
+
+    # AI CONTEXT
+    col_info = []
+    for col in df.columns:
+        dtype = str(df[col].dtype)
+        sample = str(df[col].head(5).tolist())
+        col_info.append(f"- {col} ({dtype}): e.g., {sample}")
+    col_text = "\n".join(col_info)
+    
+    stats = ""
+    try:
+        stats = df.describe(include='all').to_string()
+    except: pass
+
+    system_instruction = f"""
+You are a Senior Data Scientist and Lead Business Intelligence Analyst.
+Analyze the dataset '{table_name}' with the following schema and statistics:
+
+COLUMNS:
+{col_text}
+
+SUMMARY STATISTICS:
+{stats[:2000]} # Limit to avoid token overflow
+
+Your goal is to identify exactly:
+1. The **Top 3 Trends** in this data (growth, distributions, correlations).
+2. The **Top 2 Anomalies** or outliers (missing values, unusual values, unexpected zeros).
+
+CRITICAL INSTRUCTIONS:
+1. Return ONLY a valid JSON object.
+2. Structure: {{"trends": ["Trend 1", "Trend 2", "Trend 3"], "anomalies": ["Anomaly 1", "Anomaly 2"]}}
+3. Be specific, professional, and data-driven.
+4. If the data is too limited, provide generic but plausible observations based on the column names.
+5. NO conversation, NO markdown, JUST JSON.
+"""
+
+    for attempt in range(retries):
+        try:
+            messages = [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": "Provide the quick insights JSON object now."}
+            ]
+            
+            response = client.chat_completion(
+                model=LLAMA_MODEL_ID,
+                messages=messages,
+                max_tokens=800,
+                temperature=0.3
+            )
+            
+            text = response.choices[0].message.content.strip()
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if match:
+                text = match.group(0)
+            
+            insights = json.loads(text)
+            
+            # KEYS CHECK
+            if "trends" not in insights: insights["trends"] = []
+            if "anomalies" not in insights: insights["anomalies"] = []
+            
+            # LIMIT RESULTS
+            insights["trends"] = insights["trends"][:3]
+            insights["anomalies"] = insights["anomalies"][:2]
+            
+            return insights
+        except Exception as e:
+            if attempt == retries - 1:
+                print(f"ERROR: Quick Insights failed: {e}")
+                return {"trends": ["Unable to generate trends"], "anomalies": ["Unable to generate anomalies"]}
+            time.sleep(1)
+    return {"trends": [], "anomalies": []}
+
 
 def handle_chat_prompt(prompt, dataset_id, table_name, df_serialized=None, messages_history_tuple=None, retries=3):
     """Interpret user chat prompt using Llama 3 via Hugging Face."""
@@ -214,7 +308,8 @@ Provide **insightful, professional, and visually stunning** responses. Your goal
 
 ### 🤖 LOGIC RULES
 1. **ONLY** use `action: "create_chart"` if the user's **LATEST** message explicitly asks for a new visualization.
-2. For all other queries (Greetings, "Explain the data", "Show rows", etc.), use `action: "answer"`.
+2. **MANDATORY**: Use the **EXACT** column names from the provided schema below. Do not guess or modify them.
+3. For all other queries (Greetings, "Explain the data", "Show rows", etc.), use `action: "answer"`.
 3. **MANDATORY TEXT**: Every response **MUST** include a helpful `text` field with at least 2-3 sentences of explanation.
 
 ### 🏆 GOLD STANDARD EXAMPLE (JSON)

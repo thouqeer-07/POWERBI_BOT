@@ -3,7 +3,7 @@ import json
 import requests
 from dotenv import load_dotenv
 
-# Try to import streamlit for secrets management
+# STREAMLIT SECRETS (PROBABLY NOT IN CLOUD)
 try:
     import streamlit as st
 except ImportError:
@@ -11,7 +11,7 @@ except ImportError:
 
 load_dotenv()
 
-DEBUG = False # Set to True for verbose logging
+DEBUG = False # VERBOSE LOGS?
 
 
 class SupersetClient:
@@ -29,7 +29,7 @@ class SupersetClient:
     """
 
     def _get_conf(self, key, default=None):
-        """Helper to get secret/env safely (avoiding streamlit error in CLI/FastAPI)."""
+        # GET SECRETS SAFELY
         val = None
         if st and hasattr(st, "secrets"):
             try:
@@ -41,10 +41,10 @@ class SupersetClient:
         return val or os.getenv(key) or default
 
     def __init__(self, api_url=None, public_url=None, api_key=None, username=None, password=None, database_id=None):
-        # Internal API URL (used by this script to talk to Superset)
+        # INTERNAL URL
         self.api_url = (api_url or self._get_conf("SUPERSET_URL") or "http://localhost:8088").rstrip("/")
         
-        # Public URL (used by the browser to embed dashboards)
+        # PUBLIC URL FOR IFRAME
         # Fallback to api_url if not provided
         self.public_url = (public_url or self._get_conf("SUPERSET_PUBLIC_URL") or self.api_url).rstrip("/")
         
@@ -60,7 +60,7 @@ class SupersetClient:
         self.session = requests.Session()
         self._csrf_token = None
         
-        # --- Internal Cache for Speed ---
+        # SPEED CACHE! 🚀
         self._cache = {
             "databases": None,
             "columns": {}, # {dataset_id: [cols]}
@@ -69,17 +69,15 @@ class SupersetClient:
         }
 
     def _get_db_connection(self):
-        """Get a database connection using DB_URI."""
+        # PG CONNECTION
         try:
             import psycopg2
         except ImportError:
             raise RuntimeError("psycopg2 not installed. Run: pip install psycopg2-binary")
 
-        # 1. Use DB_URI for both Data and Metadata (Unified Setup)
-        # Use cached self.db_uri to avoid st.secrets access in threads
+        # 1. UNIFIED SETUP (DB_URI)
         db_uri = self.db_uri 
         if db_uri:
-            # print(f"DEBUG: Connecting to database using DB_URI...")
             return psycopg2.connect(db_uri, connect_timeout=10)
         
         # 2. Fallback to Localhost (Local development only)
@@ -102,16 +100,17 @@ class SupersetClient:
         token = self._ensure_token()
         headers["Authorization"] = f"Bearer {token}"
         
-        # Ensure CSRF token is present for session-based auth (or strict API)
+        # CSRF STUFF
         if not self._csrf_token:
             self._csrf_token = self._get_csrf_token()
         
         if self._csrf_token:
             headers["X-CSRFToken"] = self._csrf_token
             
-        # Bypass ngrok browser warning
+        # NGROK BYPASS
         headers["ngrok-skip-browser-warning"] = "true"
 
+        # Special case: don't recursively call _auth_headers for login or csrf itself
         return headers
 
     def _request(self, method, endpoint, **kwargs):
@@ -124,10 +123,10 @@ class SupersetClient:
             kwargs["headers"] = self._auth_headers()
             
         import time
-        # Increased retries slightly for better reliability on slow ngrok/CF tunnels
-        max_retries = kwargs.pop("retries", 3)
+        # REDUCED RETRIES for biased-fast-fail environment
+        max_retries = kwargs.pop("retries", 1)
         # Faster retry delay
-        retry_delay = 2 # seconds
+        retry_delay = 1 # seconds
         
         # Default timeout if not provided
         if "timeout" not in kwargs:
@@ -288,6 +287,38 @@ class SupersetClient:
         self._cache["databases"] = data.get("result", [])
         return data
 
+    def create_database(self, database_name, sqlalchemy_uri):
+        """Register a database in Superset."""
+        payload = {
+            "database_name": database_name,
+            "sqlalchemy_uri": sqlalchemy_uri,
+            "expose_in_sqllab": True,
+            "allow_run_async": False,
+            "allow_ctas": True,
+            "allow_cvas": True,
+            "allow_dml": True,
+            "allow_file_upload": True,
+            "extra": "{\"metadata_params\":{},\"engine_params\":{},\"metadata_cache_timeout\":{},\"schemas_allowed_for_file_upload\":[]}"
+        }
+        
+        try:
+            print(f"DEBUG: Registering database '{database_name}' in Superset...")
+            resp = self._request("POST", "api/v1/database/", json=payload, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            new_id = data.get("id")
+            print(f"✅ Database '{database_name}' registered with ID: {new_id}")
+            # Clear cache
+            self._cache["databases"] = None
+            return data
+        except Exception as e:
+            print(f"❌ Failed to register database: {e}")
+            # Try to find if it already exists
+            db_id = self.get_database_id(database_name)
+            if db_id:
+                return {"id": db_id}
+            raise
+
     def list_datasets(self):
         """List all datasets. Fetches from API or fallback to metadata DB."""
         try:
@@ -321,7 +352,10 @@ class SupersetClient:
                 })
             return datasets
         except Exception as e:
-            print(f"Warning: Direct DB dataset listing failed: {e}")
+            if "relation \"tables\" does not exist" in str(e):
+                if DEBUG: print("Warning: Superset 'tables' relation does not exist yet. Skipping direct DB listing.")
+            else:
+                print(f"Warning: Direct DB dataset listing failed: {e}")
             return []
 
     def get_table_data(self, table_name, limit=100):
@@ -347,6 +381,84 @@ class SupersetClient:
             print(f"ERROR: Direct DB data fetch failed for table '{table_name}': {e}")
             traceback.print_exc()
             return {"columns": [], "rows": []}
+    def get_db_columns(self, table_name):
+        """Fetch actual column names from the PostgreSQL database using SQL."""
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+            # Use a query that returns 0 rows but gives us the column names
+            cursor.execute(f'SELECT * FROM "{table_name}" LIMIT 0')
+            colnames = [desc[0] for desc in cursor.description]
+            cursor.close()
+            conn.close()
+            return colnames
+        except Exception as e:
+            print(f"ERROR: Could not fetch columns from DB for table {table_name}: {e}")
+            return []
+
+    def check_table_exists(self, table_name):
+        """Quickly check if a table exists in the database."""
+        try:
+            conn = self._get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s)", (table_name,))
+            exists = cursor.fetchone()[0]
+            cursor.close()
+            conn.close()
+            return exists
+        except Exception as e:
+            print(f"Warning: Table existence check failed: {e}")
+            return False
+
+    def _sync_columns_direct(self, dataset_id, column_names):
+        """Internal: Force synchronize columns by writing directly to Superset metadata DB."""
+        try:
+            import psycopg2
+        except ImportError:
+            print("ERROR: psycopg2 not installed for direct metadata sync.")
+            return False
+
+        metadata_db_uri = self._get_conf("SUPERSET_METADATA_DB_URI") or "postgresql://superset:superset_password@localhost:5432/superset"
+        conn = None
+        try:
+            print(f"DEBUG: Using metadata injection for dataset {dataset_id}...")
+            conn = psycopg2.connect(metadata_db_uri, connect_timeout=5)
+            cursor = conn.cursor()
+
+            # 1. Check existing columns to avoid duplicates
+            cursor.execute("SELECT column_name FROM table_columns WHERE table_id = %s", (int(dataset_id), ))
+            existing = {r[0] for r in cursor.fetchall()}
+
+            # 2. Insert missing columns
+            new_cols = [c for c in column_names if c not in existing]
+            
+            if not new_cols:
+                if DEBUG: print(f"DEBUG: All columns already exist in metadata DB.")
+                cursor.close()
+                conn.close()
+                return True
+
+            for col in new_cols:
+                import uuid as uuid_pkg
+                sql = """
+                    INSERT INTO table_columns 
+                    (column_name, is_active, type, groupby, filterable, table_id, is_dttm, uuid)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                # Superset expects a UUID for each column item
+                cursor.execute(sql, (col, True, "VARCHAR", True, True, int(dataset_id), False, str(uuid_pkg.uuid4())))
+
+            conn.commit()
+            cursor.close()
+            conn.close()
+            print(f"✅ Metadata Injection: Injected {len(new_cols)} columns directly.")
+            return True
+        except Exception as e:
+            print(f"❌ Metadata Injection failed: {e}")
+            if conn:
+                conn.rollback()
+                conn.close()
+            return False
 
     def list_dashboards(self):
         """List all dashboards. Uses cache if available."""
@@ -358,9 +470,9 @@ class SupersetClient:
         self._cache["dashboards"] = data.get("result", [])
         return data
 
-    def get_columns(self, dataset_id):
-        """Get column names for a dataset. Uses cache."""
-        if dataset_id in self._cache["columns"]:
+    def get_columns(self, dataset_id, force=False):
+        """Get column names for a dataset. Uses cache unless force=True."""
+        if not force and dataset_id in self._cache["columns"]:
             return self._cache["columns"][dataset_id]
             
         try:
@@ -373,108 +485,169 @@ class SupersetClient:
             print(f"Warning: Could not get columns for dataset {dataset_id}: {e}")
         return []
 
+    def refresh_dataset(self, dataset_id):
+        """Force Superset to refresh dataset metadata (pick up new columns)."""
+        try:
+            # 1. Clear local column cache for this dataset first
+            if dataset_id in self._cache.get("columns", {}):
+                del self._cache["columns"][dataset_id]
+                
+            # 2. Superset API: PUT /api/v1/dataset/{pk}/refresh/
+            # Try with and without trailing slash
+            endpoints = [f"api/v1/dataset/{dataset_id}/refresh/", f"api/v1/dataset/{dataset_id}/refresh"]
+            
+            for endpoint in endpoints:
+                try:
+                    resp = self._request("PUT", endpoint, timeout=20)
+                    if resp.ok:
+                        print(f"✅ Dataset {dataset_id} refreshed successfully via {endpoint}.")
+                        self.get_columns(dataset_id, force=True)
+                        return True
+                    
+                    if resp.status_code == 403:
+                        print(f"⚠️ 403 Forbidden on {endpoint}. Attempting Ownership Rescue...")
+                        # Assign owners: [1] (admin)
+                        # Try PUT first, then PATCH
+                        try:
+                            self._request("PUT", f"api/v1/dataset/{dataset_id}", json={"owners": [1]}, timeout=10)
+                            # Retry original refresh
+                            resp = self._request("PUT", endpoint, timeout=15)
+                            if resp.ok: return True
+                        except:
+                            pass
+                except Exception as e:
+                    if DEBUG: print(f"DEBUG: Refresh failed on {endpoint}: {e}")
+                    continue
+
+        except Exception as e:
+            print(f"❌ Error refreshing dataset {dataset_id}: {e}")
+        return False
+
     def create_dataset(self, database_id, schema, table_name, dataset_name=None):
         """Create a dataset entry that references an existing table in a connected database.
         
-        If dataset already exists, try to find and return it.
+        Optimized with a 'Fast Path' that checks for existing datasets before attempting creation.
         """
+        # --- FAST PATH: Check if dataset already exists ---
         try:
-            # List all databases to find the correct one and log it prominently
-            db_resp = self._request("GET", "api/v1/database/", timeout=10)
-            if db_resp.ok:
-                dbs = db_resp.json().get("result", [])
-                print("*" * 50)
-                print("DEBUG: SUPERSET DATABASE DISCOVERY")
-                for db in dbs:
-                    print(f"  - DB ID {db.get('id')}: {db.get('database_name')} (Type: {db.get('backend')})")
-                print("*" * 50)
-                
-                # If we only have one database and it's ID 1, we might be using the metadata DB for data
-                # If we have multiple, the user needs to know WHICH one is Supabase.
+            existing = self._find_dataset(database_id, table_name)
+            if existing:
+                if DEBUG: print(f"DEBUG: Fast Path found existing dataset ID: {existing.get('id')}")
+                return existing
         except Exception as e:
-            print(f"Warning: Could not list databases: {e}")
+            if DEBUG: print(f"DEBUG: Fast Path lookup failed: {e}")
 
-        # Try multiple payload shapes since Superset API expects either database id or object depending on version
-        endpoints = ["api/v1/dataset", "api/v1/dataset/"]
-        payloads = []
-        # payload where database is an id
-        payloads.append({
-            "database": int(database_id),
-            "schema": schema,
-            "table_name": table_name,
-            "owners": [1], # Assign to admin to avoid permission issues
-            "sql": None,
-        })
-        # payload where database is an object
-        payloads.append({
-            "database": {"id": int(database_id)},
-            "schema": schema,
-            "table_name": table_name,
-            "owners": [1],
-            "sql": None,
-        })
+        # --- NORMAL PATH: Attempt creation via API ---
+        try:
+            # Minimal Discovery (only log if DEBUG is on or cache is empty)
+            if not self._cache["databases"]:
+                db_resp = self._request("GET", "api/v1/database/", timeout=10)
+                if db_resp.ok:
+                    self._cache["databases"] = db_resp.json().get("result", [])
+        except:
+             pass
+
+        # Try multiple payload shapes (starting with the most common)
+        # 1. database as integer + trailing slash
+        # 2. database as integer + NO trailing slash
+        endpoints = ["api/v1/dataset/", "api/v1/dataset"]
+        payloads = [
+            {
+                "database": int(database_id),
+                "schema": schema,
+                "table_name": table_name,
+                "owners": [1] # Admin
+            },
+            {
+                "database": int(database_id),
+                "schema": schema,
+                "table_name": table_name,
+                # omitting owners or using a different shape if needed
+            }
+        ]
 
         errors = []
         for endpoint in endpoints:
             for payload in payloads:
                 try:
-                    print(f"DEBUG: Attempting create_dataset at {endpoint} with payload {payload}")
-                    resp = self._request("POST", endpoint, json=payload, timeout=30)
+                    if DEBUG: print(f"DEBUG: Attempting create_dataset at {endpoint}")
+                    resp = self._request("POST", endpoint, json=payload, timeout=20)
                 except Exception as e:
-                    # Check for "already exists" inside the exception
                     if "already exists" in str(e) or "422" in str(e):
-                          print("DEBUG: Dataset already exists (caught exception). Fetching existing dataset...")
-                          
-                          # Try to extract ID from error message if present (rare but possible)
-                          import re
-                          match = re.search(r'Dataset\s+(\d+)\s+already exists', str(e))
-                          if match:
-                              found_id = match.group(1)
-                              print(f"DEBUG: Extracted ID {found_id} from error message!")
-                              return {"id": int(found_id), "table_name": table_name, "database": {"id": database_id}}
-
-                          existing_ds = self._find_dataset(database_id, table_name)
-                          if existing_ds:
-                              return existing_ds
+                        existing_ds = self._find_dataset(database_id, table_name)
+                        if existing_ds: return existing_ds
                     
-                    print(f"Request failed for endpoint={endpoint} payload={payload}: {e}")
-                    errors.append(f"{endpoint} + {payload} => {e}")
+                    errors.append(f"{endpoint} => {e}")
                     continue
                 
-                # Try to parse body for diagnostic info
-                try:
-                    body = resp.json()
-                except Exception:
-                    body = resp.text
-                
                 if resp.ok:
-                    print("DEBUG: Success!")
-                    return body
+                    return resp.json()
+                
+                # JUMP to Direct DB immediately on 500 or 404 (don't wait)
+                if resp.status_code in [500, 404, 401]:
+                    print(f"DEBUG: API Create failed ({resp.status_code}). Fast-tracking Direct DB Insert...")
+                    return self._create_dataset_direct(database_id, schema, table_name)
                 
                 # Handle "already exists" case
-                if resp.status_code == 422 and "already exists" in str(body):
-                    print("DEBUG: Dataset already exists. Fetching existing dataset...")
-                    # Try to find the dataset ID
+                if resp.status_code == 422:
                     existing_ds = self._find_dataset(database_id, table_name)
-                    if existing_ds:
-                        return existing_ds
-                    
-                    # If we can't find it, we can't proceed. Returning 'body' causes NoneType errors downstream.
-                    # Raise an error to be caught by the app.
-                    raise RuntimeError(f"Dataset '{table_name}' already exists, but could not be found via API. Check database permissions or name mismatch.")
+                    if existing_ds: return existing_ds
 
-                print(f"DEBUG: Failed with status {resp.status_code}: {body}")
-                errors.append(f"{endpoint} + {payload} => Status {resp.status_code}: {body}")
+                errors.append(f"{endpoint} Status {resp.status_code}")
 
         # If API methods failed, try Direct DB Insert
         print("DEBUG: All API dataset creation attempts failed. Trying Direct DB Insert...")
         try:
              return self._create_dataset_direct(database_id, schema, table_name)
         except Exception as e:
-             print(f"DEBUG: Direct DB Insert also failed: {e}")
+             raise RuntimeError(f"All dataset creation attempts failed. Errors: {json.dumps(errors)}")
 
-        # if we reach here, all attempts failed
-        raise RuntimeError(f"All dataset creation attempts failed. Errors: {json.dumps(errors, indent=2)}")
+    def ensure_dataset_synced(self, dataset_id, retries=2):
+        """Ensure a dataset has columns and is refreshed. Fallback to Direct Metadata Injection if API fails."""
+        # 1. Get the table name for this dataset first
+        table_name = None
+        try:
+            resp = self._request("GET", f"api/v1/dataset/{dataset_id}")
+            if resp.ok:
+                table_name = resp.json().get("result", {}).get("table_name")
+        except: pass
+
+        for attempt in range(retries):
+            # FAST PATH: If columns already exist, we are done!
+            cols = self.get_columns(dataset_id, force=(attempt > 0))
+            if cols:
+                if DEBUG: print(f"DEBUG: Dataset {dataset_id} already has {len(cols)} columns. Sync skipped.")
+                return cols
+
+            print(f"DEBUG: Syncing dataset {dataset_id} (Attempt {attempt+1}/{retries})...")
+            # Try Refresh (Fast Fail)
+            try:
+                success = self.refresh_dataset(dataset_id)
+                if not success:
+                    # If refresh fails, go to metadata injection immediately
+                    raise RuntimeError("API Refresh failed")
+            except: 
+                pass
+            
+            # Now fetch with force=True
+            cols = self.get_columns(dataset_id, force=True)
+            
+            # --- DIRECT METADATA INJECTION FALLBACK ---
+            if not cols and table_name:
+                print(f"DEBUG: Dataset {dataset_id} still has no columns. Using Direct Metadata Injection...")
+                db_cols = self.get_db_columns(table_name)
+                if db_cols:
+                    if self._sync_columns_direct(dataset_id, db_cols):
+                        cols = self.get_columns(dataset_id, force=True)
+
+            if cols:
+                print(f"✅ Dataset {dataset_id} synced with {len(cols)} columns.")
+                return cols
+
+            import time
+            time.sleep(1) 
+            
+        return self.get_columns(dataset_id, force=True)
 
     def _find_dataset(self, database_id, table_name):
         """Helper to find a dataset by db and table name. Priority: Internal Cache -> Direct DB -> API."""
@@ -592,7 +765,10 @@ class SupersetClient:
             return None
             
         except Exception as e:
-            print(f"Warning: Direct DB dataset lookup failed: {e}")
+            if "relation \"tables\" does not exist" in str(e):
+                pass # Silently skip if metadata table doesn't exist
+            else:
+                print(f"Warning: Direct DB dataset lookup failed: {e}")
             return None
 
     def _check_dataset_match(self, ds, database_id, table_name):
@@ -668,6 +844,60 @@ class SupersetClient:
         
         # Fallback
         return self._delete_chart_direct(chart_id)
+
+    def list_charts_for_dataset(self, dataset_id):
+        """Find all charts linked to a dataset."""
+        import json
+        filters = [{"col": "datasource_id", "opr": "eq", "value": int(dataset_id)}]
+        params = {"q": json.dumps({"filters": filters, "page_size": 1000})}
+        
+        try:
+            resp = self._request("GET", "api/v1/chart/", params=params, timeout=15)
+            if resp.ok:
+                return resp.json().get("result", [])
+        except Exception as e:
+            print(f"Warning: API chart search failed: {e}")
+            
+        # Fallback: list through direct DB (tables: slices)
+        try:
+             conn = self._get_db_connection()
+             cursor = conn.cursor()
+             sql = "SELECT id, slice_name FROM slices WHERE datasource_id = %s"
+             cursor.execute(sql, (int(dataset_id),))
+             rows = cursor.fetchall()
+             cursor.close()
+             conn.close()
+             return [{"id": r[0], "slice_name": r[1]} for r in rows]
+        except Exception as e:
+             print(f"Warning: Direct DB chart search failed: {e}")
+             return []
+
+    def find_dashboards_by_title(self, title):
+        """Find dashboards with a specific title."""
+        import json
+        filters = [{"col": "dashboard_title", "opr": "eq", "value": title}]
+        params = {"q": json.dumps({"filters": filters, "page_size": 100})}
+        
+        try:
+            resp = self._request("GET", "api/v1/dashboard/", params=params, timeout=15)
+            if resp.ok:
+                return resp.json().get("result", [])
+        except Exception as e:
+            print(f"Warning: API dashboard search failed: {e}")
+            
+        # Fallback: Direct DB query
+        try:
+             conn = self._get_db_connection()
+             cursor = conn.cursor()
+             sql = "SELECT id, dashboard_title FROM dashboards WHERE dashboard_title = %s"
+             cursor.execute(sql, (title,))
+             rows = cursor.fetchall()
+             cursor.close()
+             conn.close()
+             return [{"id": r[0], "dashboard_title": r[1]} for r in rows]
+        except Exception as e:
+             print(f"Warning: Direct DB dashboard search failed: {e}")
+             return []
 
     def _delete_chart_direct(self, chart_id):
         try:
@@ -1167,10 +1397,6 @@ class SupersetClient:
 
         return {"result": "success"}
 
-    def list_dashboards(self):
-        resp = self._request("GET", "api/v1/dashboard/", timeout=30)
-        resp.raise_for_status()
-        return resp.json()
 
     def add_database(self, database_name, sqlalchemy_uri):
         """Add a new database connection to Superset, or return existing one if name matches."""
@@ -1206,13 +1432,6 @@ class SupersetClient:
 
             raise e
 
-    def list_databases(self):
-        """Return list of databases configured in Superset (useful to pick database_id)."""
-        import json
-        # Request a larger page size to ensure we don't miss our database if many exist
-        params = {"q": json.dumps({"page_size": 2000})}
-        resp = self._request("GET", "api/v1/database/", params=params, timeout=30)
-        return resp.json()
 
     def dashboard_url(self, dashboard_id):
         # Remove trailing slash to make parameter appending in frontend more predictable
@@ -1310,17 +1529,6 @@ class SupersetClient:
                 conn.close()
             return False
 
-    def get_columns(self, dataset_id):
-        """Get list of columns for a dataset."""
-        try:
-            resp = self._request("GET", f"api/v1/dataset/{dataset_id}", timeout=10)
-            if resp.ok:
-                result = resp.json().get("result", {})
-                columns = result.get("columns", [])
-                return [c.get("column_name") for c in columns if c.get("column_name")]
-        except Exception as e:
-            print(f"Warning: Could not fetch columns for dataset {dataset_id}: {e}")
-        return []
 
     def get_guest_token(self, dashboard_id, resources=None, user_info=None):
         """Fetch a guest token for the given dashboard."""
