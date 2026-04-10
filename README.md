@@ -55,9 +55,7 @@
 
 ---
 
-## 🔗 Live Implementation
 
-[Experience BI BOT 📊](https://bitestbot.streamlit.app/)
 
 ## 📸 Interface Preview
 
